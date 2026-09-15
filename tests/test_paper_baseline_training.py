@@ -14,10 +14,15 @@ import torch
 from fox_experiments.data import Corpus
 from fox_experiments.paper_baseline import (
     PaperBaselineConfig,
+    branch_specs,
     run_paper_comparison,
     summarize_paper_comparison,
 )
-from fox_experiments.paper_baseline.runner import natural_batch, schedule_optimizer
+from fox_experiments.paper_baseline.runner import (
+    natural_batch,
+    schedule_optimizer,
+    paired_paper_comparison,
+)
 from fox_experiments.training.optimizers import make_optimizer
 
 
@@ -117,6 +122,102 @@ class PaperBaselineTrainingTests(unittest.TestCase):
             report = summarize_paper_comparison(output)
             self.assertTrue(Path(report["context_summary"]).exists())
             self.assertTrue(all(Path(path).exists() for path in report["figures"]))
+
+    def test_model_matrix_preserves_parameter_and_function_pairing(self):
+        cfg = replace(
+            PaperBaselineConfig.for_profile("smoke"),
+            steps=1,
+            model_variants=("original_data", "factorized_constant", "direct_constant"),
+        )
+        branches = branch_specs(cfg)
+        self.assertEqual(len(branches), 10)
+        self.assertTrue(
+            all(
+                row["gate_mode"] == "original_data" or row["optimizer"] != "paper_adamw"
+                for row in branches
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "requires"):
+            replace(cfg, arms=("adam_fixed", "sgd"))
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            run_paper_comparison(cfg, ".", output, corpus=self.corpus)
+            summary = pd.read_csv(output / "summary.csv")
+            self.assertEqual(len(summary), 10)
+            self.assertEqual(summary.shared_non_gate_initial_hash.nunique(), 1)
+            self.assertEqual(summary.initial_state_hash.nunique(), 3)
+            constants = summary[summary.gate_mode != "original_data"]
+            self.assertEqual(constants.function_match_group.nunique(), 1)
+            self.assertNotEqual(
+                constants.function_match_group.iloc[0],
+                summary[summary.gate_mode == "original_data"].function_match_group.iloc[
+                    0
+                ],
+            )
+            raw = pd.read_csv(output / "lm_raw.csv")
+            suffix = raw[raw.metric == "same_target_suffix"]
+            self.assertEqual(suffix.target_token_sha256.nunique(), 1)
+            initial = suffix[
+                (suffix.stage == "initial")
+                & suffix.gate_mode.isin(["factorized_constant", "direct_constant"])
+            ]
+            paired = initial.pivot(
+                index="context_length", columns="gate_mode", values="nll"
+            )
+            np.testing.assert_allclose(
+                paired.direct_constant, paired.factorized_constant, rtol=2e-5, atol=2e-5
+            )
+            report = summarize_paper_comparison(output)
+            contrast = pd.read_csv(report["comparison_vs_paper"])
+            self.assertTrue(contrast.status.eq("ok").all())
+            self.assertEqual(len(report["figures"]), 4)
+
+    def test_paper_contrast_sign_and_missing_control_are_explicit(self):
+        rows = []
+        for gate, optimizer, values in (
+            ("original_data", "paper_adamw", (5.0, 4.0)),
+            ("factorized_constant", "adam_fixed", (4.5, 3.0)),
+        ):
+            for context, nll in zip((32, 64), values):
+                rows.append(
+                    {
+                        "arm": f"{gate}__{optimizer}",
+                        "optimizer": optimizer,
+                        "gate_mode": gate,
+                        "metric": "same_target_suffix",
+                        "checkpoint_step": 10,
+                        "sample": 0,
+                        "doc_id": 0,
+                        "window_offset": 0,
+                        "context_length": context,
+                        "train_length": 32,
+                        "target_start_offset": 56,
+                        "target_count": 8,
+                        "target_token_sha256": "shared_targets",
+                        "nll": nll,
+                        "nll_gain_vs_train_context": values[0] - nll,
+                    }
+                )
+        raw = pd.DataFrame(rows)
+        contrasts = paired_paper_comparison(raw)
+        row = contrasts[
+            (contrasts.optimizer == "adam_fixed") & (contrasts.context_length == 64)
+        ].iloc[0]
+        self.assertEqual(row.nll_difference, -1.0)
+        self.assertEqual(row.extra_context_gain_difference, 0.5)
+        self.assertTrue(row.is_extrapolation)
+        self.assertEqual(row.train_length, 32)
+        missing = paired_paper_comparison(raw[raw.optimizer != "paper_adamw"])
+        self.assertTrue(missing.status.eq("missing_paper_baseline").all())
+        self.assertTrue(missing.nll_difference.isna().all())
+        altered = raw.copy()
+        altered.loc[altered.optimizer == "adam_fixed", "target_token_sha256"] = (
+            "different_targets"
+        )
+        missing_pairs = paired_paper_comparison(altered)
+        missing_pairs = missing_pairs[missing_pairs.optimizer == "adam_fixed"]
+        self.assertTrue(missing_pairs.status.eq("missing_pairs").all())
+        self.assertTrue(missing_pairs.extra_context_gain_difference.isna().all())
 
     def test_interrupted_adam_matches_uninterrupted(self):
         cfg = replace(

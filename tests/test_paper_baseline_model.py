@@ -1,6 +1,7 @@
 """Independent checks of the downscaled upstream-default FoX architecture."""
 
 import math
+import hashlib
 import unittest
 
 import torch
@@ -8,7 +9,16 @@ from torch import nn
 from torch.nn import functional as F
 
 from fox_experiments.models import FoXLM, ModelConfig
-from fox_experiments.paper_baseline.model import build_paper_fox
+from fox_experiments.paper_baseline.model import build_comparison_fox, build_paper_fox
+
+
+def non_gate_hash(model):
+    digest = hashlib.sha256()
+    for name, tensor in model.state_dict().items():
+        if ".attn.gate." not in name:
+            digest.update(name.encode())
+            digest.update(tensor.detach().cpu().numpy().tobytes())
+    return digest.hexdigest()
 
 
 class PaperBaselineModelTests(unittest.TestCase):
@@ -142,6 +152,95 @@ class PaperBaselineModelTests(unittest.TestCase):
         self.assertTrue(
             all(b.attn.attention_backend == "upstream" for b in upstream.blocks)
         )
+
+    def test_comparison_arms_share_backbone_and_preserve_original(self):
+        source = build_paper_fox(d_model=16, n_layers=3, n_heads=2, vocab_size=43)
+        before = {name: value.clone() for name, value in source.state_dict().items()}
+        tokens = torch.arange(22).reshape(2, 11)
+        original_logits = source(tokens).detach().clone()
+        backbone_hash = non_gate_hash(source)
+        for variant in ("original_data", "factorized_constant", "direct_constant"):
+            result = build_comparison_fox(variant, source)
+            self.assertEqual(non_gate_hash(result), backbone_hash)
+            self.assertNotEqual(
+                result.embedding.weight.data_ptr(), source.embedding.weight.data_ptr()
+            )
+            self.assertEqual(result(tokens).shape, (2, 11, 43))
+            if variant == "original_data":
+                self.assertEqual(result.config, source.config)
+                torch.testing.assert_close(
+                    result(tokens), original_logits, rtol=0, atol=0
+                )
+                for name, value in result.state_dict().items():
+                    torch.testing.assert_close(value, before[name], rtol=0, atol=0)
+            else:
+                self.assertFalse(torch.allclose(result(tokens), original_logits))
+            for name, value in source.state_dict().items():
+                torch.testing.assert_close(value, before[name], rtol=0, atol=0)
+        torch.testing.assert_close(source(tokens), original_logits, rtol=0, atol=0)
+
+    def test_constant_comparison_functions_factors_and_later_gate_settings(self):
+        source = build_paper_fox(d_model=16, n_layers=3, n_heads=2, vocab_size=43)
+        factorized = build_comparison_fox("factorized_constant", source)
+        direct = build_comparison_fox("direct_constant", source)
+        gate = factorized.blocks[0].attn.gate
+        torch.testing.assert_close(gate.u, gate.v, rtol=0, atol=0)
+        expected_factor = math.sqrt(math.log(math.expm1(2.944102615)))
+        torch.testing.assert_close(gate.u, torch.full((2,), expected_factor))
+        self.assertTrue((gate.u > 0).all())
+        torch.testing.assert_close(
+            direct.blocks[0].attn.gate.b, gate.u * gate.v, rtol=0, atol=0
+        )
+        tokens = torch.arange(22).reshape(2, 11)
+        torch.testing.assert_close(factorized(tokens), direct(tokens), rtol=0, atol=0)
+        arbitrary_inputs = torch.linspace(-3, 3, 2 * 11 * 16).reshape(2, 11, 16)
+        torch.testing.assert_close(
+            gate(arbitrary_inputs), torch.full((2, 2, 11), 2.944102615)
+        )
+        for result in (factorized, direct):
+            self.assertEqual(result.config.g0, 2.944102615)
+            self.assertEqual(result.config.other_g0, 0.1)
+            self.assertEqual(result.config.gate_mode, result.blocks[0].attn.gate.mode)
+            for index, block in enumerate(result.blocks[1:], start=1):
+                torch.testing.assert_close(
+                    block.attn.gate.weight,
+                    source.blocks[index].attn.gate.weight,
+                    rtol=0,
+                    atol=0,
+                )
+                torch.testing.assert_close(
+                    block.attn.gate(torch.zeros_like(arbitrary_inputs)),
+                    torch.full((2, 2, 11), 0.1),
+                )
+                self.assertEqual(block.attn.gate.mode, "original_data")
+
+    def test_comparison_metadata_recreates_loadable_shapes_and_gradients(self):
+        source = build_paper_fox(d_model=16, n_layers=2, n_heads=2, vocab_size=43)
+        tokens = torch.arange(14).reshape(2, 7)
+        targets = (tokens + 1) % 43
+        for variant in ("original_data", "factorized_constant", "direct_constant"):
+            result = build_comparison_fox(variant, source, first_g0=1.2, other_g0=0.2)
+            restored = FoXLM(result.config)
+            restored.load_state_dict(result.state_dict(), strict=True)
+            torch.testing.assert_close(restored(tokens), result(tokens), rtol=0, atol=0)
+            result.loss(tokens, targets, logit_chunk=4).backward()
+            for name, parameter in result.named_parameters():
+                self.assertIsNotNone(parameter.grad, name)
+                self.assertTrue(torch.isfinite(parameter.grad).all(), name)
+
+    def test_comparison_rejects_invalid_constant_initial_region(self):
+        source = build_paper_fox(d_model=16, vocab_size=43)
+        for variant in ("direct_constant", "factorized_constant"):
+            for first_g0 in (0.1, math.log(2), 0.0, float("nan"), float("inf")):
+                with self.assertRaises(ValueError):
+                    build_comparison_fox(variant, source, first_g0=first_g0)
+            for other_g0 in (0.0, -1.0, float("nan"), float("inf")):
+                with self.assertRaises(ValueError):
+                    build_comparison_fox(variant, source, other_g0=other_g0)
+        with self.assertRaises(ValueError):
+            build_comparison_fox("factorized_data", source)
+        with self.assertRaises(ValueError):
+            build_comparison_fox("direct_constant", FoXLM(ModelConfig(d_model=16)))
 
 
 if __name__ == "__main__":

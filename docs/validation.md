@@ -1,5 +1,30 @@
 # Validation status
 
+## Original versus factorized/direct FoX comparison — 2026-09-15
+
+- **58 CPU tests and 22 subtests passed**. The added checks cover shared
+  non-gate initialization, exactly matching direct/factorized initial logits,
+  positive balanced factors, checkpoint reconstruction, the 10-branch matrix,
+  signed paired differences, and explicit missing-control/missing-target results.
+- `04_length_generalization_comparison.ipynb` executed all **7 code cells** in
+  a fresh local kernel using the actual cached corpus. All **10 smoke branches**
+  completed with zero failed arms and successful report/ZIP export. The run took
+  4.09 seconds; each branch saw only 64 training tokens, so it validates software.
+- The saved smoke comparison has one common non-gate initial hash, 40 paired
+  branch/context rows, and all pairing statuses `ok`. Context-gain differences
+  at the training length are exactly zero, as their definition requires.
+- Model-specific plots and the plot of differences against paper FoX were
+  visually checked. All four notebooks pass schema/Python/short-cell checks.
+- The Colab preset has **not** been trained here. Its ten branches require
+  40,960,000 training tokens in total. No length-generalization advantage or
+  arbitrary-length guarantee is claimed from the smoke run.
+
+See [the comparison design/code](length_generalization_comparison.md). Local
+execution records are in `validation/length_generalization_notebook/`. Analysis
+is separated from training in `paper_baseline/analysis.py`; earlier original-only
+saved reports remain analyzable. Resuming older code still requires its original
+source, as enforced by the run specification.
+
 ## Original-FoX baseline comparison — 2026-09-15
 
 - **52 CPU tests and 22 subtests passed** after adding the separate baseline.

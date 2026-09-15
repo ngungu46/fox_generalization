@@ -17,6 +17,11 @@ short confirmation.
 | [01_downscale_training.ipynb](notebooks/01_downscale_training.ipynb) | CPU smoke check, Colab GPU pilot, controlled theory diagnostics and plots |
 | [02_full_training.ipynb](notebooks/02_full_training.ipynb) | Full-data preparation, H200 training plans, distributed launch and saved-run analysis |
 | [03_paper_baseline_comparison.ipynb](notebooks/03_paper_baseline_comparison.ipynb) | Original FoX (LLaMA) architecture and paper AdamW recipe versus our optimizers, trained from initialization |
+| [04_length_generalization_comparison.ipynb](notebooks/04_length_generalization_comparison.ipynb) | Original FoX versus our factorized/direct gates and optimizers, with paired length-generalization measurements |
+
+**For original FoX versus our model setup, use notebook 04.** It includes the
+literal `softplus(u*v)` assumption and its function-matched direct-gate control.
+See [the comparison design and code](docs/length_generalization_comparison.md).
 
 The third notebook addresses the missing original-FoX baseline. It restores the
 paper's gate/weight initialization and model defaults, then trains natural text
@@ -41,14 +46,15 @@ fox_experiments/
 │   ├── downscale.json         # Colab-scale settings
 │   ├── replicate.json         # Larger replication of the small model
 │   ├── full/                  # Distributed full-training settings
-│   └── paper_baseline/        # Plain-FoX comparison and upstream reference
+│   ├── paper_baseline/        # Plain-FoX optimizer comparison and reference
+│   └── length_generalization/ # Original versus factorized/direct FoX
 ├── src/fox_experiments/
 │   ├── models/                # Model config, gates, attention, blocks, LM
 │   ├── data/                  # Pilot downloading, corpus windows, task probes
 │   ├── training/              # Small-run config, optimizers, trainer, experiment
 │   ├── evaluation/            # Retrieval/LM metrics, tables and figures
 │   ├── mechanism/             # Controlled binding model and analytic bounds
-│   ├── paper_baseline/        # Default-FoX pure-text recipe comparison
+│   ├── paper_baseline/        # Pure-text gate/optimizer comparisons
 │   └── full_training/         # Native full data, DDP, CUDA kernel, resume/eval
 ├── data/                      # Downloaded data; ignored by Git
 ├── outputs/                   # Checkpoints, raw predictions, reports; ignored

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, fields
 import json
+import math
 from pathlib import Path
 
 
 @dataclass
 class PaperBaselineConfig:
-    """Scaled paper recipe, with optimizer interventions on one common model.
+    """Scaled paper recipe with optimizer and optional paired gate interventions.
 
     These finite pilot settings are not the paper's original token/model budget.
     Rates are declared candidates, not selected or validated hyperparameters.
@@ -26,6 +27,9 @@ class PaperBaselineConfig:
     save_every: int = 100
     seed: int = 0
     arms: tuple[str, ...] = ("paper_adamw", "adam_fixed", "adam_annealed", "sgd")
+    model_variants: tuple[str, ...] = ("original_data",)
+    comparison_first_g0: float = 2.944102615
+    comparison_other_g0: float = 0.1
     learning_rates: dict[str, float] = field(
         default_factory=lambda: {
             "paper_adamw": 0.002,
@@ -58,7 +62,7 @@ class PaperBaselineConfig:
     short_threshold: float = 0.9
 
     def __post_init__(self):
-        for name in ("arms", "eval_contexts", "short_lags"):
+        for name in ("arms", "model_variants", "eval_contexts", "short_lags"):
             value = tuple(getattr(self, name))
             if not value or len(value) != len(set(value)):
                 raise ValueError(f"{name} must be nonempty, without duplicates")
@@ -89,6 +93,38 @@ class PaperBaselineConfig:
             )
         if not set(self.arms) <= {"paper_adamw", "adam_fixed", "adam_annealed", "sgd"}:
             raise ValueError("Unknown optimizer arm")
+        if not set(self.model_variants) <= {
+            "original_data",
+            "factorized_constant",
+            "direct_constant",
+        }:
+            raise ValueError("Unknown model variant")
+        if len(self.model_variants) > 1 and (
+            "original_data" not in self.model_variants or "paper_adamw" not in self.arms
+        ):
+            raise ValueError(
+                "A model comparison requires the original_data paper_adamw control"
+            )
+        if (
+            not math.isfinite(self.comparison_first_g0)
+            or not math.isfinite(self.comparison_other_g0)
+            or min(self.comparison_first_g0, self.comparison_other_g0) <= 0
+        ):
+            raise ValueError(
+                "Comparison gate initial decays must be finite and positive"
+            )
+        if any(
+            variant != "original_data" for variant in self.model_variants
+        ) and self.comparison_first_g0 <= math.log(2):
+            raise ValueError(
+                "Constant comparisons require the balanced-factor initialization: first_g0 > log(2)"
+            )
+        if not any(
+            variant == "original_data" or arm != "paper_adamw"
+            for variant in self.model_variants
+            for arm in self.arms
+        ):
+            raise ValueError("No supported model/optimizer branches were selected")
         if any(self.learning_rates.get(arm, 0) <= 0 for arm in self.arms):
             raise ValueError("Every selected arm needs a positive learning rate")
         if any(
@@ -190,3 +226,22 @@ class PaperBaselineConfig:
     @classmethod
     def from_json(cls, path):
         return cls.from_dict(json.loads(Path(path).read_text()))
+
+
+def branch_specs(config):
+    """Default-only studies retain old arm IDs; model matrices use unique IDs.
+
+    Paper AdamW is the original-data-gate reference. Constant gates are compared
+    with the native SGD/Adam recipes and are never called paper FoX.
+    """
+    legacy_ids = config.model_variants == ("original_data",)
+    return [
+        {
+            "branch": optimizer if legacy_ids else f"{variant}__{optimizer}",
+            "gate_mode": variant,
+            "optimizer": optimizer,
+        }
+        for variant in config.model_variants
+        for optimizer in config.arms
+        if variant == "original_data" or optimizer != "paper_adamw"
+    ]

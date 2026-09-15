@@ -1,8 +1,9 @@
 """Pure-LM paper-recipe comparison, separate from the acquisition experiment.
 
-All arms start with identical default-FoX weights and see identical EOT-reset
-natural-text batches. Only the complete optimizer recipe changes. This is a
-scaled experiment, not a replication of the original paper's compute budget.
+Optimizer arms within a model start identically and all models share nongate
+weights and EOT-reset natural-text batches. Factorized/direct constant gates
+share an initial function; the paper model has its own original gate settings.
+This is a scaled experiment, not a replication of the paper's compute budget.
 """
 
 from __future__ import annotations
@@ -31,10 +32,20 @@ from fox_experiments.training.artifacts import (
     table,
 )
 from fox_experiments.training.optimizers import make_optimizer, set_optimizer_schedule
-from .config import PaperBaselineConfig
+from .config import PaperBaselineConfig, branch_specs
+from .analysis import paired_paper_comparison, summarize_paper_comparison
 
-POLICY_VERSION = "default_fox_pure_lm_v1"
+POLICY_VERSION = "fox_model_optimizer_pure_lm_v2"
 EOT = 50256
+
+
+def _non_gate_hash(model):
+    digest = hashlib.sha256()
+    for name, value in model.state_dict().items():
+        if ".attn.gate." not in name:
+            digest.update(name.encode())
+            digest.update(value.detach().cpu().numpy().tobytes())
+    return digest.hexdigest()
 
 
 def _source_identity():
@@ -114,7 +125,16 @@ def _restore_rng(saved, device):
         torch.cuda.set_rng_state(saved["cuda"].cpu(), device)
 
 
-def _train_arm(model, corpus, config, arm, directory, signature, initial_hash):
+def _train_arm(
+    model,
+    corpus,
+    config,
+    arm,
+    directory,
+    signature,
+    initial_hash,
+    initial_metadata=None,
+):
     device = next(model.parameters()).device
     optimizer = make_optimizer(model, config, arm, config.learning_rates[arm])
     checkpoint = directory / "last.pt"
@@ -197,12 +217,15 @@ def _train_arm(model, corpus, config, arm, directory, signature, initial_hash):
                     "signature": signature,
                     "initial_state_hash": initial_hash,
                     "arm": arm,
+                    "branch_id": directory.name,
+                    "gate_mode": model.config.gate_mode,
+                    "initial_metadata": initial_metadata,
                     "policy_version": POLICY_VERSION,
                 },
             )
             table(directory / "training.csv", history)
             print(
-                f"{arm}: {step + 1}/{config.steps} updates; LM loss {total_loss:.4f}",
+                f"{directory.name}: {step + 1}/{config.steps} updates; LM loss {total_loss:.4f}",
                 flush=True,
             )
     return history
@@ -233,7 +256,9 @@ def _evaluation_windows(corpus, config):
 
 
 @torch.no_grad()
-def evaluate_language_model(model, corpus, config, arm, checkpoint_step):
+def evaluate_language_model(
+    model, corpus, config, arm, checkpoint_step, branch_metadata=None
+):
     """Score identical held-out targets under different reset context windows.
 
     Every context predicts the same last K target tokens. `context_length` is
@@ -268,6 +293,7 @@ def evaluate_language_model(model, corpus, config, arm, checkpoint_step):
                         .tolist()
                     )
             metadata = {
+                **(branch_metadata or {}),
                 "arm": arm,
                 "checkpoint_step": checkpoint_step,
                 "sample": window["sample"],
@@ -354,12 +380,12 @@ def _short_diagnostic(model, corpus, config, data_dir):
 def run_paper_comparison(
     config, data_dir, out_dir, device="cpu", resume=False, *, corpus=None
 ):
-    """Run independent optimizer recipes from one shared random initialization.
+    """Run optimizer recipes on explicitly paired random model initializations.
 
     Resume requires identical configuration, source, dataset and device type.
     Changed recipes need a new directory. Individual failed arms remain visible.
     """
-    from .model import build_paper_fox
+    from .model import build_paper_fox, build_comparison_fox
 
     device = torch.device(device)
     if device.type not in ("cpu", "cuda"):
@@ -386,12 +412,54 @@ def run_paper_comparison(
         attention_backend=config.attention_backend,
         gradient_checkpointing=config.gradient_checkpointing,
     ).to(device)
-    initial_hash = state_hash(initial)
+    shared_non_gate_hash = _non_gate_hash(initial)
+    initials = {
+        variant: build_comparison_fox(
+            variant,
+            initial,
+            first_g0=config.comparison_first_g0,
+            other_g0=config.comparison_other_g0,
+        ).to(device)
+        for variant in config.model_variants
+    }
+    initial_metadata = {}
+    for variant, model in initials.items():
+        if _non_gate_hash(model) != shared_non_gate_hash:
+            raise AssertionError("Model variants changed nongate initialization")
+        initial_metadata[variant] = {
+            "gate_mode": variant,
+            "seed_id": config.seed,
+            "initial_state_hash": state_hash(model),
+            "shared_non_gate_initial_hash": shared_non_gate_hash,
+            "function_match_group": (
+                "paper_default"
+                if variant == "original_data"
+                else "constant_first_gate_pair"
+            ),
+        }
+    if {"direct_constant", "factorized_constant"} <= set(initials):
+        check = natural_batch(corpus, config, 0, 0)[0][:1, :32].to(device)
+        with torch.no_grad(), _autocast(config, device):
+            direct = initials["direct_constant"]
+            factored = initials["factorized_constant"]
+            torch.testing.assert_close(
+                direct.logits(direct.encode(check, query_chunk=32)[:, -1]),
+                factored.logits(factored.encode(check, query_chunk=32)[:, -1]),
+                rtol=2e-5,
+                atol=2e-5,
+            )
+    branches = branch_specs(config)
     spec = {
         "policy_version": POLICY_VERSION,
         "config": config.to_dict(),
         "model_config": asdict(initial.config),
-        "initial_state_hash": initial_hash,
+        "initial_state_hash": state_hash(initial),
+        "shared_non_gate_initial_hash": shared_non_gate_hash,
+        "initial_states": initial_metadata,
+        "model_configs": {
+            variant: asdict(model.config) for variant, model in initials.items()
+        },
+        "branches": branches,
         "source_sha256": _source_identity(),
         "runtime_versions": {
             "python": platform.python_version(),
@@ -439,6 +507,10 @@ def run_paper_comparison(
                         else None
                     ),
                     "parameter_count": sum(p.numel() for p in initial.parameters()),
+                    "parameter_counts": {
+                        variant: sum(p.numel() for p in model.parameters())
+                        for variant, model in initials.items()
+                    },
                     "tokens_per_arm": config.steps * config.tokens_per_update,
                 },
             )
@@ -447,25 +519,60 @@ def run_paper_comparison(
             {"status": "running", "software_only": config.profile == "smoke"},
         )
         if not (output / "initial_lm_raw.csv").exists():
+            initial_rows = []
+            for variant, model in initials.items():
+                label = (
+                    "shared_initial"
+                    if config.model_variants == ("original_data",)
+                    else f"{variant}__initial"
+                )
+                metadata = {
+                    **initial_metadata[variant],
+                    "optimizer": "initial",
+                    "stage": "initial",
+                }
+                initial_rows.extend(
+                    evaluate_language_model(model, corpus, config, label, 0, metadata)
+                )
             table(
                 output / "initial_lm_raw.csv",
-                evaluate_language_model(initial, corpus, config, "shared_initial", 0),
+                initial_rows,
             )
         failures, summaries = [], []
-        for arm in config.arms:
-            directory = output / arm
+        for branch in branches:
+            branch_id, arm, variant = (
+                branch["branch"],
+                branch["optimizer"],
+                branch["gate_mode"],
+            )
+            metadata = {**initial_metadata[variant], "optimizer": arm, "stage": "final"}
+            initial_hash = metadata["initial_state_hash"]
+            branch_signature = hashlib.sha256(
+                (signature + json.dumps(branch, sort_keys=True)).encode()
+            ).hexdigest()
+            directory = output / branch_id
             directory.mkdir(exist_ok=True)
-            model = copy.deepcopy(initial)
+            model = copy.deepcopy(initials[variant])
             assert state_hash(model) == initial_hash
             try:
                 history = _train_arm(
-                    model, corpus, config, arm, directory, signature, initial_hash
+                    model,
+                    corpus,
+                    config,
+                    arm,
+                    directory,
+                    branch_signature,
+                    initial_hash,
+                    metadata,
                 )
-                rows = evaluate_language_model(model, corpus, config, arm, config.steps)
+                rows = evaluate_language_model(
+                    model, corpus, config, branch_id, config.steps, metadata
+                )
                 table(directory / "lm_raw.csv", rows)
                 suffix = [row for row in rows if row["metric"] == "same_target_suffix"]
                 summary = {
-                    "arm": arm,
+                    **metadata,
+                    "arm": branch_id,
                     "status": "complete",
                     "steps": len(history),
                     "input_tokens": len(history) * config.tokens_per_update,
@@ -494,7 +601,8 @@ def run_paper_comparison(
                 summaries.append(summary)
             except (FloatingPointError, RuntimeError) as error:
                 failure = {
-                    "arm": arm,
+                    **metadata,
+                    "arm": branch_id,
                     "status": "failed",
                     "reason": str(error),
                     "software_only": config.profile == "smoke",
@@ -526,84 +634,4 @@ def run_paper_comparison(
         "summary": str(output / "summary.csv"),
         "lm_raw": str(output / "lm_raw.csv"),
         "failures": str(output / "failures.json"),
-    }
-
-
-def summarize_paper_comparison(out_dir):
-    """Regenerate pure-LM plots; retrieval qualification never gates these metrics."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    output = Path(out_dir)
-    config = PaperBaselineConfig.from_json(output / "config.json")
-    raw = pd.read_csv(output / "lm_raw.csv")
-    suffix = raw[raw.metric == "same_target_suffix"]
-    means = suffix.groupby(
-        ["arm", "checkpoint_step", "context_length"], as_index=False
-    ).agg(
-        mean_nll=("nll", "mean"),
-        mean_nll_gain=("nll_gain_vs_train_context", "mean"),
-        documents=("sample", "nunique"),
-    )
-    means.to_csv(output / "context_summary.csv", index=False)
-    figure, axes = plt.subplots(1, 3, figsize=(14, 4.2))
-    for arm, frame in raw.groupby("arm"):
-        style = "--" if arm == "shared_initial" else "-"
-        per_position = frame[frame.metric == "per_position"].copy()
-        per_position["position_bin"] = ((per_position.position - 1) // 32) * 32 + 1
-        positional = per_position.groupby("position_bin").agg(
-            position=("position", "mean"), nll=("nll", "mean")
-        )
-        axes[0].plot(positional.position, positional.nll, style, label=arm)
-        contexts = means[means.arm == arm].sort_values("context_length")
-        axes[1].plot(contexts.context_length, contexts.mean_nll, style + "o", label=arm)
-        axes[2].plot(
-            contexts.context_length, contexts.mean_nll_gain, style + "o", label=arm
-        )
-    for axis in axes:
-        axis.axvline(
-            config.train_length,
-            color="black",
-            linestyle="--",
-            alpha=0.55,
-            label="Training context",
-        )
-        axis.grid(alpha=0.2)
-    axes[0].set(
-        title="Next-token loss by position",
-        xlabel="Target position (32-token bin centers)",
-        ylabel="NLL (nats)",
-        xlim=(1, max((*config.eval_contexts, config.train_length))),
-    )
-    axes[1].set(
-        title="Identical target suffix",
-        xlabel="Reset context window (tokens)",
-        ylabel="NLL (nats)",
-    )
-    axes[2].set(
-        title="Utility of additional context",
-        xlabel="Reset context window (tokens)",
-        ylabel="NLL gain vs training context",
-    )
-    axes[2].axhline(0, color="black", linewidth=0.7)
-    axes[1].set_xscale("log", base=2)
-    axes[2].set_xscale("log", base=2)
-    label = (
-        "Software validation only"
-        if config.profile == "smoke"
-        else "Finite default-FoX pilot; optimizer rates untuned"
-    )
-    figure.suptitle(label)
-    handles, labels = axes[1].get_legend_handles_labels()
-    figure.legend(handles, labels, loc="lower center", ncol=3, fontsize=8)
-    figure.tight_layout(rect=(0, 0.14, 1, 0.94))
-    path = output / "paper_context_comparison.png"
-    figure.savefig(path, dpi=150)
-    plt.close(figure)
-    return {
-        "context_summary": str(output / "context_summary.csv"),
-        "figures": [str(path)],
-        "summary": str(output / "summary.csv"),
     }

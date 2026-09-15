@@ -26,11 +26,13 @@ output normalization, local windows, or pruning are enabled here.
 
 from __future__ import annotations
 
+import copy
+from dataclasses import replace
 import math
 
 import torch
 
-from fox_experiments.models import FoXLM, ModelConfig
+from fox_experiments.models import FoXLM, ForgetGate, ModelConfig, inverse_softplus
 
 
 def build_paper_fox(
@@ -90,4 +92,84 @@ def build_paper_fox(
     return model
 
 
-__all__ = ["build_paper_fox"]
+def build_comparison_fox(
+    variant: str,
+    shared_paper_model: FoXLM,
+    first_g0: float = 2.944102615,
+    other_g0: float = 0.1,
+) -> FoXLM:
+    """Create one gate variant while preserving a shared paper-FoX backbone.
+
+    ``original_data`` returns an independent, unchanged copy of the source.
+    ``factorized_constant`` replaces the first block's gate by
+    ``softplus(u_h * v_h)``, initialized with equal positive factors, and
+    ``direct_constant`` uses a function-matched ``softplus(b_h)`` gate. Later
+    blocks in both constant arms keep the source's data-dependent gate matrices
+    but initialize their biases to ``inverse_softplus(other_g0)``. Thus
+    ``other_g0`` is their decay at zero input, not at every input.
+
+    Every non-gate parameter is copied bitwise; the input source is untouched.
+    The original-data and constant variants intentionally have different
+    initial functions. Only the two constant arms are function-matched. Their
+    first-gate parameter counts also differ from the original data-dependent
+    gate. Positive balanced factors reflect one prescribed initialization
+    condition; they do not establish all assumptions of the theory.
+
+    New first-gate parameters use FP32 on the source device, preserving exact
+    pairing under the shared model's FP32 gate arithmetic. All other tensors
+    retain the source's device and dtype. Model configuration records the new
+    gate mode and initial decay settings, and can be used to construct the
+    correct parameter shapes before loading this variant's state dict.
+    """
+    variants = ("original_data", "factorized_constant", "direct_constant")
+    if variant not in variants:
+        raise ValueError(f"variant must be one of {variants}")
+    if not isinstance(shared_paper_model, FoXLM):
+        raise TypeError("shared_paper_model must be a FoXLM")
+    if shared_paper_model.config.gate_mode != "original_data" or any(
+        block.attn.gate.mode != "original_data" for block in shared_paper_model.blocks
+    ):
+        raise ValueError("The shared paper model must use original_data in every block")
+    if variant == "original_data":
+        return copy.deepcopy(shared_paper_model)
+    if not math.isfinite(first_g0) or first_g0 <= math.log(2.0):
+        raise ValueError("Constant comparison arms require finite first_g0 > log(2)")
+    if not math.isfinite(other_g0) or other_g0 <= 0:
+        raise ValueError("other_g0 must be finite and positive")
+
+    model = copy.deepcopy(shared_paper_model)
+    model.config = replace(
+        model.config, gate_mode=variant, g0=float(first_g0), other_g0=float(other_g0)
+    )
+    source_gate = shared_paper_model.blocks[0].attn.gate
+    gate = ForgetGate(
+        model.config.d_model,
+        model.config.n_heads,
+        "factorized_constant",
+        first_g0,
+        model.config.seed + 100003,
+        model.config.gate_weight_std,
+    ).to(device=source_gate.b.device, dtype=torch.float32)
+    if variant == "direct_constant":
+        direct_gate = ForgetGate(
+            model.config.d_model,
+            model.config.n_heads,
+            "direct_constant",
+            first_g0,
+            model.config.seed + 100003,
+            model.config.gate_weight_std,
+        ).to(device=source_gate.b.device, dtype=torch.float32)
+        with torch.no_grad():
+            # Match the actual FP32 product, including sqrt roundoff, so the
+            # two parameterizations have identical logits at the intervention.
+            direct_gate.b.copy_(gate.u * gate.v)
+        gate = direct_gate
+    gate.train(source_gate.training)
+    model.blocks[0].attn.gate = gate
+    with torch.no_grad():
+        for block in model.blocks[1:]:
+            block.attn.gate.b.fill_(inverse_softplus(other_g0))
+    return model
+
+
+__all__ = ["build_paper_fox", "build_comparison_fox"]
