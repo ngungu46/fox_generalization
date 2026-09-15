@@ -13,6 +13,8 @@ from typing import Protocol
 import numpy as np
 import torch
 
+PROTOCOL_VERSION = "latest_write_v2_independent_stale"
+
 
 class ProbeBatchConfig(Protocol):
     """Training settings used by the batch builder, without a trainer import."""
@@ -34,9 +36,15 @@ class LatestWriteData:
 
     Each synthetic fragment is tokenized separately on purpose. No special
     vocabulary, record-position embeddings, or key labels enter the model.
+
+    Protocol v2 draws the stale value uniformly from the nine digits other than
+    the latest value. Protocol v1 always used ``(latest + 5) % 10``, which let a
+    model recover the answer from a stale write alone. Changing the protocol
+    requires fresh training and evaluation; existing v1 results stay v1.
     """
 
     names = (" Ada", " Ben", " Eve", " Finn", " Hugo", " Jack", " Rose", " Sam")
+    protocol_version = PROTOCOL_VERSION
 
     def __init__(self, corpus, tokenizer):
         self.corpus = corpus
@@ -88,7 +96,9 @@ class LatestWriteData:
         key = int(rng.integers(len(self.names)))
         other = (key + int(rng.integers(1, len(self.names)))) % len(self.names)
         answer = int(rng.integers(10))
-        stale_answer = (answer + 5) % 10
+        # A conflict must disagree with the latest write, but the old digit
+        # must not reveal the answer through a deterministic inverse mapping.
+        stale_answer = (answer + int(rng.integers(1, 10))) % 10
         other_answer = int(rng.integers(10))
 
         latest_write = self.record(key, answer, style)
@@ -126,6 +136,7 @@ class LatestWriteData:
             stale_positions.append(len(extra_prefix) + old_position)
 
         return {
+            "protocol_version": self.protocol_version,
             "tokens": tokens,
             "answer": self.answers[answer],
             "answer_digit": answer,

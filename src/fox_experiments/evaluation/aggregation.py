@@ -55,10 +55,26 @@ def finite_grid_ranges(panels: pd.DataFrame, threshold: float = 0.9) -> pd.DataF
     for (branch, step), frame in conflict.groupby(["branch", "checkpoint_step"]):
         grid = sorted(frame.lag.unique())
         radius = 0
+        first_failed_lag = None
+        invalid_measurement = False
         for lag in grid:
-            if frame[frame.lag == lag].history_accuracy.min() < threshold:
+            accuracy = frame[frame.lag == lag].history_accuracy.to_numpy()
+            if not np.isfinite(accuracy).all() or accuracy.min() < threshold:
+                first_failed_lag = lag
+                invalid_measurement = not np.isfinite(accuracy).all()
                 break
             radius = lag
+        qualified = bool(frame.short_qualified.astype(str).str.lower().eq("true").all())
+        if invalid_measurement:
+            interpretation = "invalid_measurement"
+        elif not qualified:
+            interpretation = "short_rule_not_acquired"
+        elif radius == 0:
+            interpretation = "first_tested_lag_failed"
+        elif radius == max(grid):
+            interpretation = "test_ceiling_reached"
+        else:
+            interpretation = "finite_tested_range"
         rows.append(
             {
                 "branch": branch,
@@ -67,7 +83,9 @@ def finite_grid_ranges(panels: pd.DataFrame, threshold: float = 0.9) -> pd.DataF
                 "first_tested_lag": min(grid),
                 "last_tested_lag": max(grid),
                 "right_censored": radius == max(grid),
-                "short_qualified": bool(frame.short_qualified.all()),
+                "short_qualified": qualified,
+                "first_failed_tested_lag": first_failed_lag,
+                "interpretation": interpretation,
                 "threshold": threshold,
                 "note": "Only tested grid points; intervening and smaller untested lags are not certified",
             }

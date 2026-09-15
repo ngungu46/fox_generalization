@@ -67,7 +67,11 @@ def state_hash(model: nn.Module) -> str:
 
 def dataset_identity(data: Any) -> dict[str, Any]:
     """Fingerprint the local corpus splits and answer vocabulary before resuming."""
-    result = {"answer_token_ids": data.answers, "splits": {}}
+    result = {
+        "answer_token_ids": data.answers,
+        "probe_protocol": getattr(data, "protocol_version", "unspecified"),
+        "splits": {},
+    }
     for split in ("train", "validation", "test"):
         array = data.corpus.arrays[split]
         digest = hashlib.sha256()

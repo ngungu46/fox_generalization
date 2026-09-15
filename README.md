@@ -6,10 +6,24 @@ training calls and analysis; **they do not embed or generate Python modules**.
 
 ## Start here
 
+**The saved v1 pilot did not learn short retrieval.** Its zero all-edit scores
+come from constant digit predictions; controlled-model zeros have separate
+confidence/prefix causes. Read the [actual-run diagnosis](docs/downscale_v1_diagnosis.md)
+before launching a longer run. No replacement acquisition recipe has yet passed
+short confirmation.
+
 | Notebook | Purpose |
 |---|---|
 | [01_downscale_training.ipynb](notebooks/01_downscale_training.ipynb) | CPU smoke check, Colab GPU pilot, controlled theory diagnostics and plots |
 | [02_full_training.ipynb](notebooks/02_full_training.ipynb) | Full-data preparation, H200 training plans, distributed launch and saved-run analysis |
+| [03_paper_baseline_comparison.ipynb](notebooks/03_paper_baseline_comparison.ipynb) | Original FoX (LLaMA) architecture and paper AdamW recipe versus our optimizers, trained from initialization |
+
+The third notebook addresses the missing original-FoX baseline. It restores the
+paper's gate/weight initialization and model defaults, then trains natural text
+with matched model/data/token budgets across four optimizer arms. The earlier
+`original_data + paper_adamw` branch remains an adapted optimizer control. See
+[the baseline comparison guide](docs/paper_baseline_comparison.md) for the
+Colab run and the separate full published-scale reference.
 
 The new source uses the supplied `forgetting-transformer-main` as its reference.
 The full backend includes the authors' efficient forgetting-attention kernel.
@@ -21,18 +35,20 @@ reproduction of the paper's published benchmark numbers.
 
 ```text
 fox_experiments/
-├── notebooks/                 # The two short training/analysis notebooks
+├── notebooks/                 # Short training/analysis notebooks
 ├── configs/
 │   ├── smoke.json             # Tiny software validation
 │   ├── downscale.json         # Colab-scale settings
 │   ├── replicate.json         # Larger replication of the small model
-│   └── full/                  # Distributed full-training settings
+│   ├── full/                  # Distributed full-training settings
+│   └── paper_baseline/        # Plain-FoX comparison and upstream reference
 ├── src/fox_experiments/
 │   ├── models/                # Model config, gates, attention, blocks, LM
 │   ├── data/                  # Pilot downloading, corpus windows, task probes
 │   ├── training/              # Small-run config, optimizers, trainer, experiment
 │   ├── evaluation/            # Retrieval/LM metrics, tables and figures
 │   ├── mechanism/             # Controlled binding model and analytic bounds
+│   ├── paper_baseline/        # Default-FoX pure-text recipe comparison
 │   └── full_training/         # Native full data, DDP, CUDA kernel, resume/eval
 ├── data/                      # Downloaded data; ignored by Git
 ├── outputs/                   # Checkpoints, raw predictions, reports; ignored
@@ -71,10 +87,29 @@ CPU smoke profile is not a scientific experiment. Add `--resume` to continue an
 interrupted small-model run with the same configuration, code and data; choose
 a fresh output directory when changing settings.
 
+Scientific small-model runs now stop before optimizer comparisons if short
+acquisition fails. The smoke profile still runs all branches to check software.
+`--allow-unqualified` explicitly enables diagnostic continuation of failed
+sources; its results cannot establish an acquired rule's generalization boundary.
+
+The current generated probes use protocol `latest_write_v2_independent_stale`,
+which removes v1's deterministic old-value shortcut. Use a fresh run name after
+updating; retain old outputs as v1 records. The cached text corpus is unchanged.
+
+To troubleshoot an extracted report ZIP without model weights:
+
+```bash
+fox-experiment diagnose --out PATH_TO_EXTRACTED_RESULTS/text
+fox-experiment diagnose --out PATH_TO_EXTRACTED_RESULTS/mechanism --mechanism
+```
+
+The commands write explanatory tables under each run's `diagnostics/` directory
+and preserve the input predictions and scientific scores.
+
 ## Git and Google Colab
 
-This folder has its **own initialized Git repository**. No commit or remote has
-been created. Dataset binaries, credentials, checkpoints and outputs are ignored.
+This folder has its **own Git repository**. Dataset binaries, credentials,
+checkpoints and outputs are ignored.
 Your original notebook and supplied source folder remain available unchanged.
 
 Create a GitHub repository, then run these commands here with its actual URL:

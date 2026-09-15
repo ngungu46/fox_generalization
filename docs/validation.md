@@ -1,6 +1,63 @@
 # Validation status
 
-## Verified locally
+## Original-FoX baseline comparison — 2026-09-15
+
+- **52 CPU tests and 22 subtests passed** after adding the separate baseline.
+  New checks cover the reference architecture/initialization, retention-sign
+  output and gradient equivalence, paper warmup/cosine, paired initial weights
+  and data, identical evaluation targets, failed-arm reporting, and exact
+  interrupted Adam resume. The four runner tests also passed after the final
+  plot-axis correction.
+- `03_paper_baseline_comparison.ipynb` executed all **7 short code cells** on
+  the actual cached LongCrawl64 pilot in a fresh local Jupyter kernel. All four
+  smoke arms completed, reports and ZIP export succeeded, and there were no
+  error outputs. The final execution took 2.79 seconds and is explicitly a
+  software check: each arm trained on only 64 tokens.
+- The plot was visually checked. Per-position loss uses 32-token bin centers
+  on the full evaluation-length axis; the training-length marker therefore
+  represents the correct location. Raw per-token measurements are retained.
+- The copied upstream Hydra configuration is byte-identical to the supplied
+  source, and all 17 recorded source hashes were verified.
+- **The 4,096,000-token-per-arm Colab preset has not been trained here.** No
+  published-scale FoX replication or new optimizer generalization result is
+  claimed. The previous `paper_adamw` result was an adapted control.
+
+See [the baseline guide](paper_baseline_comparison.md) and
+[reference audit](paper_baseline_reference.md). Local execution copies and
+reports are under `validation/paper_baseline_notebook/`; checkpoints and raw
+validation outputs remain ignored by Git.
+
+## Saved-pilot troubleshooting — 2026-09-15
+
+- **42 CPU tests passed** after the diagnostic and acquisition-guard changes.
+  New coverage checks constant-prediction diagnosis, all-edit scoring, failed and
+  nonfinite ranges, preservation of raw report bytes, stopping before optimizer
+  trials, acquisition-policy resume rejection, controlled decoder feasibility,
+  exact witness diagnostics, and the removal of the deterministic stale digit.
+- The updated downscale notebook executed all **11 code cells** without errors
+  in a fresh local Jupyter kernel, using protocol v2 and the real cached corpus
+  with `PROFILE="smoke"`. Execution took 8.16 seconds. This checks software only.
+  The delivered notebook has no execution outputs. Both notebooks pass schema
+  and Python checks; both now have 11 code cells, each at most 30 lines.
+- The actual user-supplied A100 report archive was analyzed independently of
+  smoke outputs. Both text sources failed short acquisition; every final branch
+  predicts a constant digit. The original acquisition was reproduced on CPU
+  with NLL within 0.000013 of the archived result.
+- Two additional acquisition-only v2 screens each trained on 8,000 answers.
+  Both retained zero all-edit accuracy. **No successful acquisition recipe or
+  optimizer length-generalization separation was validated.**
+- The controlled saved states were checked with exact witness expressions.
+  Adam's 99% radius is blocked by decoder confidence. SGD R=8 has a real finite
+  stale-prefix failure; SGD R=2 and R=4 have sufficient radius 9.
+- The acquisition override is now part of the immutable run specification;
+  resumed runs cannot silently change it. Intentional unqualified continuation
+  is marked in the final status as diagnostic.
+
+See [the full diagnosis](downscale_v1_diagnosis.md). Raw records and execution
+copies remain in the Git-ignored `validation/` directory. Original v1 results
+were preserved; protocol v2 requires a fresh run.
+
+## Original package validation
 
 - **33 CPU tests passed**: 12 model checks, 5 data checks, 4 small-training
   integration checks, 6 controlled-mechanism checks, and 6 full-runner checks.
@@ -34,9 +91,10 @@
 
 ## Not yet verified
 
-No Colab GPU pilot, CUDA/Triton kernel execution, multi-process GPU training,
-H200 throughput/memory measurement, full corpus download, or full scientific
-training run was performed here. The full notebook's required hardware preflight
+The user's saved Colab/A100 pilot has now been inspected as described above.
+No CUDA/Triton kernel execution, multi-process GPU training, H200 throughput/memory
+measurement, full corpus download, or full scientific training run was performed
+locally. The full notebook's required hardware preflight
 compares weak/strong forgetting and nondivisible sequence lengths against the
 dense reference before a GPU launch. It must pass on the chosen environment.
 

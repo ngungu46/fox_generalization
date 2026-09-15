@@ -14,7 +14,7 @@ import numpy as np
 import tiktoken
 import torch
 
-from fox_experiments.data import Corpus, LatestWriteData, load_corpus
+from fox_experiments.data import Corpus, LatestWriteData, PROTOCOL_VERSION, load_corpus
 
 
 class DataTests(unittest.TestCase):
@@ -71,6 +71,23 @@ class DataTests(unittest.TestCase):
             weights[:, -1], torch.full((2,), config.answer_weight)
         )
         torch.testing.assert_close(weights[:, :-1], torch.ones_like(weights[:, :-1]))
+
+    def test_stale_value_cannot_deterministically_reveal_latest_value(self):
+        """A single stale digit must be compatible with multiple correct answers."""
+        answers_by_stale = {digit: set() for digit in range(10)}
+        stale_by_answer = {digit: set() for digit in range(10)}
+        for seed in range(512):
+            example = self.data.example("test", seed, 32, 128)
+            self.assertEqual(example["protocol_version"], PROTOCOL_VERSION)
+            position = example["stale_positions"][-1]
+            stale = self.data.answers.index(example["tokens"][position])
+            answer = example["answer_digit"]
+            self.assertNotEqual(stale, answer)
+            answers_by_stale[stale].add(answer)
+            stale_by_answer[answer].add(stale)
+        # The v1 (+5) shortcut has exactly one entry in each of these sets.
+        self.assertTrue(all(len(values) >= 3 for values in answers_by_stale.values()))
+        self.assertTrue(all(len(values) >= 3 for values in stale_by_answer.values()))
 
     def test_sampling_never_crosses_document_and_validation_is_disjoint(self):
         rows = np.stack([np.full(16, value, dtype=np.uint16) for value in range(4)])

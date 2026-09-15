@@ -1,0 +1,53 @@
+{
+  "profile": "smoke",
+  "d_model": 16,
+  "n_layers": 2,
+  "n_heads": 2,
+  "train_length": 32,
+  "batch_size": 1,
+  "accumulation": 1,
+  "steps": 2,
+  "save_every": 1,
+  "seed": 0,
+  "arms": [
+    "paper_adamw",
+    "adam_fixed",
+    "adam_annealed",
+    "sgd"
+  ],
+  "learning_rates": {
+    "paper_adamw": 0.002,
+    "adam_fixed": 0.001,
+    "adam_annealed": 0.001,
+    "sgd": 0.01
+  },
+  "paper_warmup_steps": null,
+  "beta1": 0.1,
+  "beta2": 0.1,
+  "eps0": 1e-08,
+  "epsilon_decay": 0.01,
+  "lr_offset": 1000.0,
+  "lr_power": 0.75,
+  "first_gate_multiplier": 1.5,
+  "retrieval_gate_multiplier": 0.05,
+  "output_multiplier": 0.1,
+  "eval_contexts": [
+    32,
+    64
+  ],
+  "eval_rows": 1,
+  "eval_target_tokens": 8,
+  "query_chunk": 32,
+  "logit_chunk": 32,
+  "attention_backend": "sdpa",
+  "gradient_checkpointing": false,
+  "precision": "fp32",
+  "short_retrieval_diagnostic": false,
+  "short_lags": [
+    32,
+    64,
+    96
+  ],
+  "short_histories": 12,
+  "short_threshold": 0.9
+}

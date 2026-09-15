@@ -13,6 +13,7 @@ from .aggregation import (
     paired_optimizer_contrasts,
 )
 from .plotting import plot_language_modeling, plot_retrieval_panels
+from .diagnostics import diagnose_run
 
 
 def summarize_results(
@@ -53,4 +54,5 @@ def summarize_results(
     software_only = bool(raw.software_only.eq(True).all())
     paths = plot_retrieval_panels(panels, figures, software_only)
     paths.append(plot_language_modeling(language_modeling, figures, software_only))
+    diagnose_run(output)
     return panels, ranges, contrasts, paths

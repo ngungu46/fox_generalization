@@ -51,6 +51,7 @@ def _initialize_run(
     config: ExperimentConfig,
     device: str,
     resume: bool,
+    allow_unqualified: bool,
 ) -> None:
     """Require deliberate reuse and validate the config, data, and implementation."""
     populated = any(path.name != ".run.lock" for path in out.iterdir())
@@ -63,6 +64,7 @@ def _initialize_run(
         "config": config.to_dict(),
         "dataset": dataset_identity(data),
         "implementation": _implementation_identity(),
+        "acquisition_policy": {"allow_unqualified": allow_unqualified},
     }
     signature_path = out / "run_specification.json"
     if populated:
@@ -75,7 +77,7 @@ def _initialize_run(
             signature, sort_keys=True
         ):
             raise ValueError(
-                "Resume configuration, dataset, or implementation differs from the saved run. "
+                "Resume configuration, dataset, implementation, or acquisition policy differs from the saved run. "
                 "Choose a new run name to keep results separate."
             )
     else:
@@ -334,6 +336,7 @@ def _result_paths(out: Path) -> dict[str, str]:
         "retrieval": str(out / "retrieval_raw.csv"),
         "lm": str(out / "lm_raw.csv"),
         "failures": str(out / "failures.json"),
+        "status": json.loads((out / "run_status.json").read_text())["status"],
     }
 
 
@@ -344,22 +347,27 @@ def run_experiment(
     device: str = "cpu",
     *,
     resume: bool = False,
+    allow_unqualified: bool | None = None,
 ) -> dict[str, str]:
     """Run the full small-scale study with explicit, checked resume semantics.
 
     Acquisition is shared by paired factorized/direct constant-gate branches.
     Learning rates are chosen on tune data. Confirm data qualifies the short rule;
     the frozen lag/prefix test grid is never used for learning-rate selection.
-    Unqualified branches remain visible as diagnostics. Read failures.json before
-    interpreting outputs. Set resume=True only to continue this exact run.
+    Scientific runs stop before continuation if a source fails the short task.
+    Set allow_unqualified=True only for an explicitly diagnostic/from-scratch run.
+    Smoke defaults to allowing these untrained branches for software verification.
+    Read failures.json before interpreting outputs. Resume requires the exact run.
     """
     out = Path(out_dir)
+    if allow_unqualified is None:
+        allow_unqualified = config.profile == "smoke"
     with exclusive_run_lock(out):
-        _initialize_run(out, data, config, device, resume)
+        _initialize_run(out, data, config, device, resume, allow_unqualified)
         status_path = out / "run_status.json"
-        if (
-            status_path.exists()
-            and json.loads(status_path.read_text())["status"] == "complete"
+        if status_path.exists() and json.loads(status_path.read_text())["status"] in (
+            "complete",
+            "complete_unqualified_diagnostic",
         ):
             _aggregate_cached_results(out)
             return _result_paths(out)
@@ -368,8 +376,10 @@ def run_experiment(
             {"status": "running", "software_only": config.profile == "smoke"},
         )
         failures = []
+        n_unqualified_sources = 0
         for seed in config.seeds:
             sources = {}
+            unqualified_sources = []
             source_gates = {source_gate_for(gate) for gate, _ in branch_specs(config)}
             for source_gate in sorted(source_gates):
                 source, row = _acquire_source(
@@ -380,6 +390,23 @@ def run_experiment(
                     failures.append(row)
                     continue
                 sources[source_gate] = source
+                if not row["qualified"]:
+                    unqualified_sources.append(source_gate)
+                    n_unqualified_sources += 1
+            if unqualified_sources and not allow_unqualified:
+                failures.append(
+                    {
+                        "seed": seed,
+                        "status": "short_acquisition_failed",
+                        "source_gates": unqualified_sources,
+                        "action": "Improve short acquisition in a new named run before optimizer continuation.",
+                    }
+                )
+                print(
+                    f"Seed {seed}: short acquisition failed; optimizer trials and long tests skipped.",
+                    flush=True,
+                )
+                continue
             for gate, arm in branch_specs(config):
                 source_gate = source_gate_for(gate)
                 if source_gate not in sources:
@@ -446,9 +473,29 @@ def run_experiment(
         dump_json(
             status_path,
             {
-                "status": "complete" if not failures else "complete_with_failures",
+                "status": (
+                    "acquisition_failed"
+                    if any(
+                        f.get("status") == "short_acquisition_failed" for f in failures
+                    )
+                    and not (out / "retrieval_raw.csv").exists()
+                    else (
+                        "complete_with_failures"
+                        if failures
+                        else (
+                            "complete_unqualified_diagnostic"
+                            if n_unqualified_sources
+                            else "complete"
+                        )
+                    )
+                ),
                 "failed_branches_or_sources": len(failures),
                 "software_only": config.profile == "smoke",
+                "allow_unqualified": allow_unqualified,
+                "unqualified_sources": n_unqualified_sources,
+                "unqualified_continuation_is_diagnostic": bool(
+                    allow_unqualified and n_unqualified_sources
+                ),
             },
         )
         return _result_paths(out)

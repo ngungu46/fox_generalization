@@ -37,6 +37,12 @@ def main(argv=None):
     train.add_argument("--out", required=True)
     train.add_argument("--device", choices=("cpu", "cuda"), default=None)
     train.add_argument("--resume", action="store_true")
+    train.add_argument(
+        "--allow-unqualified",
+        action="store_true",
+        default=None,
+        help="Explicitly continue failed acquisition for diagnostics/from-scratch studies",
+    )
 
     mechanism = commands.add_parser(
         "mechanism", help="Run the controlled binding model"
@@ -51,6 +57,12 @@ def main(argv=None):
     )
     report.add_argument("--out", required=True)
     report.add_argument("--mechanism", action="store_true")
+
+    diagnose = commands.add_parser(
+        "diagnose", help="Explain zero metrics from saved results"
+    )
+    diagnose.add_argument("--out", required=True)
+    diagnose.add_argument("--mechanism", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "download":
@@ -70,7 +82,15 @@ def main(argv=None):
         if device == "cpu":
             torch.set_num_threads(min(4, os.cpu_count() or 1))
         data, _ = prepare_data(args.data_dir)
-        run_experiment(data, config, args.out, device=device, resume=args.resume)
+        result = run_experiment(
+            data,
+            config,
+            args.out,
+            device=device,
+            resume=args.resume,
+            allow_unqualified=args.allow_unqualified,
+        )
+        print(json.dumps(result, indent=2))
     elif args.command == "mechanism":
         import torch
 
@@ -91,6 +111,19 @@ def main(argv=None):
             plot_mechanism(args.out) if args.mechanism else summarize_results(args.out)
         )
         print(result)
+    elif args.command == "diagnose":
+        if args.mechanism:
+            from .mechanism.diagnose import diagnose_mechanism
+
+            result = diagnose_mechanism(args.out)
+            destination = Path(args.out) / "diagnostics"
+            destination.mkdir(parents=True, exist_ok=True)
+            result.to_csv(destination / "mechanism_diagnosis.csv", index=False)
+            print(result.to_string(index=False))
+        else:
+            from .evaluation import diagnose_run
+
+            print(json.dumps(diagnose_run(args.out), indent=2))
 
 
 if __name__ == "__main__":

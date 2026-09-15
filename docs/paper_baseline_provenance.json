@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "audited_date": "2026-09-15",
+  "source_kind": "user_supplied_directory",
+  "source_directory": "/Users/ngungu46/Downloads/forgetting-transformer-main",
+  "upstream_git_commit": null,
+  "commit_note": "No commit identity inferred from a downloaded directory; per-file SHA256 values identify the audited contents.",
+  "official_paper": {
+    "arxiv_id": "2503.02130",
+    "version": "v2",
+    "url": "https://arxiv.org/html/2503.02130v2",
+    "pdf": "https://arxiv.org/pdf/2503.02130v2",
+    "sections": [
+      "3 Architecture design",
+      "4.1 Experimental setup",
+      "B.1 Model and training hyperparameters",
+      "D Data-independent forget gate initialization"
+    ]
+  },
+  "upstream_repository": "https://github.com/zhixuan-lin/forgetting-transformer",
+  "reference_copy": {
+    "source_path": "/Users/ngungu46/Downloads/forgetting-transformer-main/configs/experiment/longcrawl64/forgetting_transformer/llama_125m_2b.yaml",
+    "repository_path": "configs/paper_baseline/upstream_llama_125m_2b.yaml",
+    "sha256": "33767c91583fd23ba65a9ac74be656846d53ad432e5f982fd77320ede060c323",
+    "byte_identical": true
+  },
+  "plain_125m_parameter_count": {
+    "method": "Analytic count from supplied plain-FoX tensor shapes; not an executed upstream-model instantiation.",
+    "vocab_size": 50257,
+    "hidden_size": 768,
+    "num_heads": 12,
+    "num_layers": 12,
+    "intermediate_size": 2048,
+    "input_embedding_parameters": 38597376,
+    "non_embedding_parameters": 123661968,
+    "total_parameters": 162259344,
+    "paper_naming": "125M is the rounded non-embedding size; input embeddings excluded, untied output head included."
+  },
+  "files": [
+    {
+      "path": "REPRODUCE.md",
+      "bytes": 8392,
+      "sha256": "3ccb7839d113c0ff9c6959a48ecc5b9b8e61ec794f82933ae892e514a1a60c08",
+      "role": "Upstream training command, dependencies and checkpoint provenance"
+    },
+    {
+      "path": "configs/config.py",
+      "bytes": 3682,
+      "sha256": "5d5106401d3127075c1c52e37a95fad0332fb8ff9da0f85cdd69daf2a5eef241",
+      "role": "Default weight-decay exclusions and experiment configuration"
+    },
+    {
+      "path": "configs/experiment/longcrawl64/forgetting_transformer/llama_125m_2b.yaml",
+      "bytes": 1521,
+      "sha256": "33767c91583fd23ba65a9ac74be656846d53ad432e5f982fd77320ede060c323",
+      "role": "Primary original FoX LLaMA reference recipe; copied verbatim"
+    },
+    {
+      "path": "configs/experiment/longcrawl64/forgetting_transformer/pro_125m_2b.yaml",
+      "bytes": 1729,
+      "sha256": "d130c1ccf9a8b81aa9abdf64526372750144f61d092b97b87bb78f94072ef67a",
+      "role": "Separate Pro architecture reference; not the primary baseline"
+    },
+    {
+      "path": "configs/experiment/longcrawl64/forgetting_transformer/llama_760m_48b.yaml",
+      "bytes": 1479,
+      "sha256": "38c534b02f341ce2a8a983e8b7f4e70aba5fcc7582fd095f96be8e308393ed7d",
+      "role": "Published main-scale original FoX learning rate and architecture"
+    },
+    {
+      "path": "configs/model/forgetting_transformer.py",
+      "bytes": 1892,
+      "sha256": "a7ec0fe94b84f58bbd761094cb3a9ed7008bf3521e100146699040c21ae7fa84",
+      "role": "Resolved model defaults used by training"
+    },
+    {
+      "path": "configs/optimizer/adamw.py",
+      "bytes": 322,
+      "sha256": "ac5dfc4d7c6abc812e810c68832c927b199c512c6d81e628b384d91c1e58edcf",
+      "role": "AdamW constructor and default epsilon inheritance"
+    },
+    {
+      "path": "configs/schedule/warmup_cosine.py",
+      "bytes": 397,
+      "sha256": "4492bb3c5dc6750bfe7d88af48d162bf8856e422a1f8684fccb44408d66aa798",
+      "role": "Warmup/cosine schedule configuration"
+    },
+    {
+      "path": "configs/datamodule/longcrawl64.py",
+      "bytes": 1004,
+      "sha256": "2a0beefe1bed8eed5aa824be3f11d3c0829ce9de3c88c5f41f7589605b5a04a6",
+      "role": "LongCrawl64 loader configuration"
+    },
+    {
+      "path": "src/forgetting_transformer/model/forgetting_transformer/configuration_forgetting_transformer.py",
+      "bytes": 3275,
+      "sha256": "fef5c7f0dd4ce2135825a5369b98a993fc121979f29825aa4208bbdcfb3795ca",
+      "role": "Architecture defaults and model configuration"
+    },
+    {
+      "path": "src/forgetting_transformer/model/forgetting_transformer/modeling_forgetting_transformer.py",
+      "bytes": 38137,
+      "sha256": "b53e259eb124fadd9c7f55c4d901870360ce476cb0044a348a514cbdd6db036d",
+      "role": "Gate, MLP, RMSNorm and initialization implementation"
+    },
+    {
+      "path": "src/forgetting_transformer/datamodule/longcrawl64.py",
+      "bytes": 11564,
+      "sha256": "94012bd080ac801c0f8892751a0395e816d4a6b171dd1cce516e3d7b069f6526",
+      "role": "Native data sizes, fixed chunk ordering and EOT input shift"
+    },
+    {
+      "path": "src/forgetting_transformer/datamodule/common.py",
+      "bytes": 1496,
+      "sha256": "e4cb2729aac6d7358f0a62d07a89e6ae633a5915118e6f66aae83eef6165a327",
+      "role": "Dataset batch metadata"
+    },
+    {
+      "path": "src/forgetting_transformer/schedule/schedule.py",
+      "bytes": 11652,
+      "sha256": "6c757fe2ad8052ed6994a3a80b90815144fd7a06140917c0a275a3d5abf22c45",
+      "role": "Exact token-clock warmup/cosine implementation"
+    },
+    {
+      "path": "src/forgetting_transformer/tokenizer.py",
+      "bytes": 1307,
+      "sha256": "76f01e25f5ef024d34ae997cfcd3081420fac1c28a3193a9ec116fc818e821ad",
+      "role": "JSON-escaped GPT2 tokenizer convention"
+    },
+    {
+      "path": "src/forgetting_transformer/utils.py",
+      "bytes": 12721,
+      "sha256": "84babbf557be966b88b0a41d8885b000ef15eb71cdc07cbb79f4be73c20213b8",
+      "role": "Optimizer parameter grouping helpers"
+    },
+    {
+      "path": "train.py",
+      "bytes": 34488,
+      "sha256": "aeee2f842c833cce413f7ab3705a65d07801b510cfa327a54475e9bdbbbc2fcf",
+      "role": "Full training, token schedule, gradient accumulation and parameter-count convention"
+    }
+  ]
+}
