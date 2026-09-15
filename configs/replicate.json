@@ -1,0 +1,79 @@
+{
+  "profile": "replicate",
+  "d_model": 128,
+  "n_heads": 4,
+  "n_layers": 2,
+  "train_length": 256,
+  "batch_size": 2,
+  "accumulation": 1,
+  "pretrain_steps": 500,
+  "acquisition_steps": 1500,
+  "trial_steps": 100,
+  "continuation_steps": 2000,
+  "save_every": 100,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "train_lags": [
+    32,
+    64,
+    96
+  ],
+  "test_lags": [
+    32,
+    64,
+    96,
+    128,
+    256,
+    512,
+    1024
+  ],
+  "prefix_copies": [
+    0,
+    16,
+    64
+  ],
+  "test_histories": 32,
+  "validation_histories": 64,
+  "lm_eval_length": 4096,
+  "lm_eval_rows": 8,
+  "answer_weight": 128.0,
+  "mixture_probability": 0.5,
+  "acquisition_lr": 0.001,
+  "adam_lrs": [
+    0.0003,
+    0.001,
+    0.003
+  ],
+  "sgd_lrs": [
+    0.01,
+    0.05,
+    0.2
+  ],
+  "beta1": 0.1,
+  "beta2": 0.1,
+  "eps0": 1e-08,
+  "epsilon_decay": 0.01,
+  "lr_offset": 1000.0,
+  "lr_power": 0.75,
+  "first_gate_multiplier": 1.5,
+  "retrieval_gate_multiplier": 0.05,
+  "output_multiplier": 0.1,
+  "g0": 2.944102615,
+  "other_g0": 0.1,
+  "short_threshold": 0.9,
+  "query_chunk": 128,
+  "gate_modes": [
+    "factorized_constant",
+    "direct_constant",
+    "original_data"
+  ],
+  "optimizer_arms": [
+    "sgd",
+    "adam_fixed",
+    "adam_annealed"
+  ],
+  "include_paper_control": true
+}

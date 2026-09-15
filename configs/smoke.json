@@ -1,0 +1,67 @@
+{
+  "profile": "smoke",
+  "d_model": 16,
+  "n_heads": 2,
+  "n_layers": 2,
+  "train_length": 96,
+  "batch_size": 1,
+  "accumulation": 1,
+  "pretrain_steps": 1,
+  "acquisition_steps": 2,
+  "trial_steps": 1,
+  "continuation_steps": 2,
+  "save_every": 1,
+  "seeds": [
+    0
+  ],
+  "train_lags": [
+    24,
+    32
+  ],
+  "test_lags": [
+    24,
+    32,
+    48
+  ],
+  "prefix_copies": [
+    0,
+    2
+  ],
+  "test_histories": 1,
+  "validation_histories": 2,
+  "lm_eval_length": 64,
+  "lm_eval_rows": 1,
+  "answer_weight": 128.0,
+  "mixture_probability": 0.5,
+  "acquisition_lr": 0.001,
+  "adam_lrs": [
+    0.001
+  ],
+  "sgd_lrs": [
+    0.05
+  ],
+  "beta1": 0.1,
+  "beta2": 0.1,
+  "eps0": 1e-08,
+  "epsilon_decay": 0.01,
+  "lr_offset": 1000.0,
+  "lr_power": 0.75,
+  "first_gate_multiplier": 1.5,
+  "retrieval_gate_multiplier": 0.05,
+  "output_multiplier": 0.1,
+  "g0": 2.944102615,
+  "other_g0": 0.1,
+  "short_threshold": 0.9,
+  "query_chunk": 32,
+  "gate_modes": [
+    "factorized_constant",
+    "direct_constant",
+    "original_data"
+  ],
+  "optimizer_arms": [
+    "sgd",
+    "adam_fixed",
+    "adam_annealed"
+  ],
+  "include_paper_control": true
+}

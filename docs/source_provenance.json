@@ -1,0 +1,23 @@
+{
+  "authoritative_theory": {
+    "filename": "learning_with_cot-3.pdf",
+    "sha256": "efb2ce55f7cc63b8219f9a8fd2f9829fd96fa04bcc58cc87374899cefc59b71c",
+    "note": "Latest attachment supplied by the user; private manuscript not copied into repository."
+  },
+  "architecture_reference": {
+    "paper": "https://arxiv.org/abs/2503.02130",
+    "supplied_folder": "forgetting-transformer-main",
+    "source": "https://github.com/zhixuan-lin/forgetting-transformer",
+    "note": "Local source archive used as reference; not assigned an invented upstream commit."
+  },
+  "previous_experiment": {
+    "folder": "fox_realistic_colab_20260915",
+    "sources": {
+      "fox_analysis.py": "6babeda2594870b7c4c517781abe9e0dbe1841e79e39a6d7a286205901e8ebd4",
+      "fox_experiment.py": "fed7935e2b6d96febf83d5d5c3a35653cbf9df0c5733f61da149185e2e792aa7",
+      "fox_mechanism.py": "362afe4690d974b3b633ddfcff947091a83d7b8032e196982d3105639e2d4bd6",
+      "fox_data.py": "bd0fbbeaf72ef1ba716f8870fbec4c8c481a35c24552cb04b923b2d12ff633a5",
+      "fox_lm.py": "201591b559ba39ae9d2823874bd6e4ec20e59f1826a47a5b64bef8e452868039"
+    }
+  }
+}

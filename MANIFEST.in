@@ -1,0 +1,12 @@
+include README.md requirements.txt
+recursive-include configs *.json
+recursive-include docs *.md *.json
+recursive-include notebooks *.ipynb
+recursive-include scripts *.py *.sh *.sbatch
+recursive-include tests *.py
+recursive-include third_party *
+recursive-include src/fox_experiments/full_training/_vendor *.txt *.md *.json
+exclude data/*.u16
+prune outputs
+prune runs
+prune validation

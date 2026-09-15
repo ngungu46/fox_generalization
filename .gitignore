@@ -1,0 +1,28 @@
+# Environment and generated Python files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+build/
+dist/
+
+# Keep raw text, tokens, credentials, checkpoints and results out of Git.
+data/*
+!data/README.md
+outputs/
+runs/
+validation/
+*.pt
+*.pth
+*.safetensors
+*.zip
+*.log
+.env
+.env.*
+
+# Local run configuration can include school-specific paths.
+configs/local/

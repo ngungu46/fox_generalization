@@ -1,0 +1,78 @@
+{
+  "name": "h200_124m",
+  "data_root": "data/longcrawl64_full",
+  "output_root": "runs/full",
+  "seed": 0,
+  "model": {
+    "d_model": 640,
+    "n_heads": 10,
+    "n_layers": 12,
+    "ff_hidden": 1728,
+    "g0": 2.944102615,
+    "other_g0": 0.1,
+    "attention_backend": "upstream",
+    "gradient_checkpointing": true
+  },
+  "task": {
+    "profile": "full",
+    "train_length": 2048,
+    "batch_size": 1,
+    "accumulation": 16,
+    "train_lags": [
+      128,
+      256,
+      512,
+      1024
+    ],
+    "test_lags": [
+      128,
+      256,
+      512,
+      1024,
+      2048,
+      4096,
+      8192,
+      16384
+    ],
+    "prefix_copies": [
+      0,
+      128,
+      512,
+      2048
+    ],
+    "test_histories": 32,
+    "validation_histories": 64,
+    "lm_eval_length": 16384,
+    "lm_eval_rows": 16,
+    "answer_weight": 128.0,
+    "mixture_probability": 0.5,
+    "beta1": 0.1,
+    "beta2": 0.1,
+    "eps0": 1e-08,
+    "epsilon_decay": 0.01,
+    "lr_offset": 1000.0,
+    "lr_power": 0.75,
+    "first_gate_multiplier": 1.5,
+    "retrieval_gate_multiplier": 0.05,
+    "output_multiplier": 0.1,
+    "short_threshold": 0.9,
+    "query_chunk": 256
+  },
+  "pretrain_steps": 2048,
+  "acquisition_steps": 2048,
+  "continuation_steps": 4096,
+  "learning_rates": {
+    "source": 0.001,
+    "sgd": 0.05,
+    "adam_fixed": 0.001,
+    "adam_annealed": 0.001,
+    "paper_adamw": 0.001
+  },
+  "warmup_steps": 256,
+  "checkpoint_every": 256,
+  "log_every": 10,
+  "logit_chunk": 128,
+  "precision": "bf16",
+  "expected_world_size": 4,
+  "strict_data": true
+}
