@@ -18,6 +18,14 @@ short confirmation.
 | [02_full_training.ipynb](notebooks/02_full_training.ipynb) | Full-data preparation, H200 training plans, distributed launch and saved-run analysis |
 | [03_paper_baseline_comparison.ipynb](notebooks/03_paper_baseline_comparison.ipynb) | Original FoX (LLaMA) architecture and paper AdamW recipe versus our optimizers, trained from initialization |
 | [04_length_generalization_comparison.ipynb](notebooks/04_length_generalization_comparison.ipynb) | Original FoX versus our factorized/direct gates and optimizers, with paired length-generalization measurements |
+| [05_loss_and_constraints.ipynb](notebooks/05_loss_and_constraints.ipynb) | Latest-answer loss versus all-token NTP on identical short histories; matched gates, optimizer controls, gradient-conflict diagnostics and named constraint ablations |
+
+**For the loss-objective and restriction study, use notebook 05.** It defaults
+to the Colab training profile, starts with a compact controlled task, and
+separately offers a real-text background extension. Read the
+[design and troubleshooting guide](docs/loss_and_constraints_study.md).
+Short acquisition failures are visible and never converted into a claimed
+generalization cutoff.
 
 **For original FoX versus our model setup, use notebook 04.** It includes the
 literal `softplus(u*v)` assumption and its function-matched direct-gate control.

@@ -146,3 +146,23 @@ To exercise actual data, run the first notebook with `PROFILE="smoke"` or use
 the CLI commands in the main README. The reduced full-runner tests do not
 download the full dataset or start a GPU job. Development execution copies and
 raw validation artifacts are retained under the Git-ignored `validation/` folder.
+# Loss-objective and constraint study
+
+Notebook 05 adds a paired latest-answer/all-token objective study. The complete
+suite passes **87 tests plus 22 subtests**, including causal data, loss-gradient
+decomposition, source-matched resume, short-only LR selection, and truthful
+handling of unqualified/censored ranges. All five notebooks pass schema and
+short-cell checks. Notebook 05 executed all ten code cells and twelve smoke
+branches without failures. Four figures were rendered and inspected.
+
+See [local calibration details](loss_study_local_checks.md) for the separate
+short-only CPU experiments used to choose the initial retrieval decay. Those
+checks found an answer-only positive control, all-token gradient interference,
+and continuing SGD acquisition failures; they do not establish the theorem's
+optimizer separation.
+
+The final default profile also completed all twelve 2,000-update branches on a
+single CPU thread in 243 seconds, without runtime failures. Four branches passed
+final short qualification; their finite tested radii were 4, 8, 4 and 2. Full
+outcomes, including failures and intermediate regressions, appear in the local
+checks document. These finite observations do not establish the theorem.

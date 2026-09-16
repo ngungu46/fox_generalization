@@ -1,0 +1,79 @@
+{
+  "profile": "smoke",
+  "objectives": [
+    "answer_only",
+    "all_tokens"
+  ],
+  "optimizers": [
+    "sgd",
+    "adam_fixed",
+    "adam_annealed"
+  ],
+  "gate_modes": [
+    "factorized_constant",
+    "direct_constant"
+  ],
+  "seeds": [
+    0
+  ],
+  "steps": 2,
+  "batch_size": 4,
+  "eval_every": 2,
+  "checkpoint_every": 1,
+  "diagnostic_every": 2,
+  "d_model": 16,
+  "n_heads": 2,
+  "n_layers": 2,
+  "n_keys": 4,
+  "n_values": 2,
+  "data_mode": "records",
+  "train_support": "diverse",
+  "train_max_lag": 2,
+  "train_max_prefix": 1,
+  "older_stale_fraction": 0.5,
+  "short_lags": [
+    1,
+    2
+  ],
+  "eval_lags": [
+    1,
+    2,
+    4
+  ],
+  "eval_prefixes": [
+    0,
+    2
+  ],
+  "eval_histories": 2,
+  "qualification_threshold": 0.9,
+  "probability_threshold": 0.9,
+  "routing": "record",
+  "first_g0": 2.944102615,
+  "retrieval_g0": 0.5,
+  "retrieval_gate": "constant",
+  "qk_norm": false,
+  "output_gate": false,
+  "representation_schedule": "shared",
+  "representation_multiplier": 1.0,
+  "representation_power": 2.0,
+  "first_gate_multiplier": 1.5,
+  "retrieval_gate_multiplier": 0.05,
+  "output_multiplier": 1.0,
+  "learning_rates": {
+    "sgd": 0.1,
+    "adam_fixed": 0.003,
+    "adam_annealed": 0.003,
+    "paper_adamw": 0.003
+  },
+  "branch_learning_rates": {},
+  "beta1": 0.1,
+  "beta2": 0.1,
+  "eps0": 1e-08,
+  "epsilon_decay": 0.01,
+  "lr_offset": 1000.0,
+  "lr_power": 0.75,
+  "weight_decay": 0.0,
+  "clip_grad": null,
+  "answer_weight": 1.0,
+  "query_chunk": 128
+}
