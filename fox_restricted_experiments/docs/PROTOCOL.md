@@ -110,8 +110,11 @@ Validated state is saved atomically; numerical failures restore the previous
 commit. Increasing the budget resumes a completed finite run. CPU tests check
 bitwise continuation; floating-point CUDA reductions can vary across runs.
 
-The historical kernel under `legacy/` is preserved byte-for-byte so existing
-finite-pair checkpoints remain usable. New experiments use separate output
+The historical model, objective, and error-bound kernels under `legacy/` are
+unchanged. Optional packed data and compiled updates alter execution only;
+audits compare them with the reference. Known previous-runner checkpoints
+upgrade with their original source archived and training state retained.
+Floating-point reduction order can differ. New scientific experiments use separate output
 folders. Existing measured CPU pilots remain under `results/` and are not
 relabelled as random-data or A100 results. Finite decreasing upper bounds and
 increasing radii are evidence to inspect, not an infinite-time proof.

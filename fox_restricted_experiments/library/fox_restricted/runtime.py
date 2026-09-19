@@ -10,7 +10,7 @@ import torch
 from .legacy.core import Model, LogAdam, acquisition_rates, rates_at
 from .legacy.a100_runner import _optimizer_step, _step_inputs, _sync, _check_health
 from .data.random_streams import sample_stream_batch
-from .training.random_training import _draw_gradients
+from .training.random_training import _draw_gradients, _draw_inputs
 
 
 def check_runtime(device="cuda", *, require_a100=True):
@@ -45,7 +45,7 @@ def prepare_output(run_tag, *, use_drive=True, local_root="fox_results"):
     return out
 
 
-def benchmark(experiments, *, measured_steps=10, warmup=3):
+def benchmark(experiments, *, measured_steps=10, warmup=3, performance=None):
     """Time each requested objective at its real shape on the current hardware.
 
     All benchmark states are discarded. These are initial throughput estimates,
@@ -66,17 +66,30 @@ def benchmark(experiments, *, measured_steps=10, warmup=3):
                 rng=np.random.default_rng(c.seed + 130363), device=c.device, batch_size=experiment.dataset_size)
         acquisition = acquisition_rates(c, experiment.optimizer)
         frozen = model.theta.clone()
+        compute = None
+        if performance is not None:
+            from .training.performance import ComputeEngine
+            compute = ComputeEngine(model, adam, performance, population,
+                                    online=experiment.dataset == "random" and experiment.random_sampling == "online")
 
         def update(step):
             if experiment.dataset == "pairs":
                 _, rates, counts, _ = _step_inputs(c, experiment.optimizer, step, acquisition, rng)
+                if compute is not None:
+                    return compute.update(rates, step, counts=counts)
                 gradients, info = model.gradients(counts, validate_counts=False)
             else:
                 _, rates = (0., acquisition[step - 1]) if step <= 3 else rates_at(c, experiment.optimizer, step - 4)
+                if compute is not None:
+                    counts, batch, _ = _draw_inputs(model, experiment, population, rng, step)
+                    return compute.update(rates, step, counts=counts, batch=batch)
                 gradients, info, _ = _draw_gradients(model, experiment, population, rng, step)
             _optimizer_step(model, adam, gradients, rates, step)
             return gradients, info
 
+        if compute is not None and performance.compile_updates:
+            print(f"{experiment.name}: compiling and auditing the update; first use can take several minutes", flush=True)
+        warmup = max(1, warmup) if compute is not None and performance.compile_updates else warmup
         for step in range(1, 4 + warmup):
             update(step)
         _sync(c.device)
@@ -93,6 +106,8 @@ def benchmark(experiments, *, measured_steps=10, warmup=3):
                    estimated_hours_all_seeds=per_step*c.steps*len(experiment.seeds)/3600,
                    measured_updates=measured_steps, device=c.device,
                    acquired_gap_positive=bool((model.gaps()[model.mask] > 0).all()))
+        if compute is not None:
+            row["performance"] = compute.describe()
         rows.append(row)
         print(f"{experiment.name}: {per_step:.4g} s/update; "
               f"rough estimate {row['estimated_hours_all_seeds']:.2f} hours for all seeds", flush=True)

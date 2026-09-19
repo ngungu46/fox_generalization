@@ -119,6 +119,7 @@ SGD's inherited rate constants are calibrated from the deterministic zero-table 
 from fox_restricted import (
     a100_config, RandomStreamConfig, make_experiments, train, summarize,
     plot_fixed_lags, plot_moving_lag, check_runtime, prepare_output, benchmark,
+    PerformanceConfig, profile_experiment, format_profile,
 )
 
 SMOKE = False
@@ -131,6 +132,10 @@ RUN_TAG = "fox_eight_runs_v1"
 USE_DRIVE = True
 RUN_CHECKS = True
 RUN_BENCHMARK = True
+COMPILE_UPDATES = True           # One-time compilation/audit; combines gradients and optimizer.
+PACK_RANDOM = True               # Skip padding; retains every sampled real record.
+RUN_PROFILE = False              # Enable to diagnose a slow run on this actual GPU.
+PROFILE_EXPERIMENT = "random_learned_adam"
 REQUIRE_A100 = True
 RANDOM_SAMPLING = "fixed"
 RANDOM_DATASET_SIZE = None       # None means N(N-1) sampled streams per seed.
@@ -141,6 +146,7 @@ if SMOKE:
     USE_DRIVE, REQUIRE_A100 = False, False
     RANDOM_DATASET_SIZE = 256
     LOG_EVERY, CHECKPOINT_EVERY = 10, 10
+    COMPILE_UPDATES = False
 
 config = a100_config(n=N, d=WIDTH, R=R, steps=STEPS, h0=H0,
                      beta1=BETA1, beta2=BETA2, device="cpu" if SMOKE else "cuda")
@@ -155,6 +161,7 @@ experiments = make_experiments(
     log_every=LOG_EVERY, checkpoint_every=CHECKPOINT_EVERY,
 )
 HARDWARE = check_runtime(config.device, require_a100=REQUIRE_A100)
+PERFORMANCE = PerformanceConfig(pack_random=PACK_RANDOM, compile_updates=COMPILE_UPDATES)
 OUTPUT = prepare_output(RUN_TAG + ("_smoke" if SMOKE else ""), use_drive=USE_DRIVE)
 print(HARDWARE)
 print("Output:", OUTPUT)
@@ -167,12 +174,35 @@ The tests compare analytical gradients with literal attention and native PyTorch
 validate the random sampler, and test checkpoint continuation. The benchmark uses disposable
 models at the requested size, including the random datasets. It does not spend any updates of
 the eight saved experiments. Its time estimates exclude plotting, Drive I/O, and later dynamics.
+
+`PACK_RANDOM=True` processes only the real records in the fixed random dataset. It does not
+shorten sequences, change sampling, or change precision. `COMPILE_UPDATES=True` combines the
+gradient and optimizer update with `torch.compile`; its first use can take several minutes.
+The measured per-update benchmark excludes that initial compilation and numerical audit.
+The audit must pass on this GPU. There is no silent eager fallback if compilation fails;
+set `COMPILE_UPDATES=False` and resume the last checkpoint in that case. Set it to False
+also for `RANDOM_SAMPLING="online"`, whose changing shapes would repeatedly compile.
+
+The optional profile compares the original and selected compute paths on this hardware,
+separates sampling/gradient/optimizer costs when possible, and measures disposable checkpoint
+writes to local disk and Drive. It does not alter the trained experiment checkpoints.
 """)
     code(r'''
 if RUN_CHECKS:
     subprocess.run([sys.executable, "-m", "pytest", "-q", str(PACKAGE / "tests")], check=True, cwd=PACKAGE)
 if RUN_BENCHMARK:
-    throughput = benchmark(experiments, measured_steps=2 if SMOKE else 10, warmup=1 if SMOKE else 3)
+    throughput = benchmark(experiments, measured_steps=2 if SMOKE else 10, warmup=1 if SMOKE else 3,
+                           performance=PERFORMANCE)
+if RUN_PROFILE:
+    selected = experiments[PROFILE_EXPERIMENT]
+    original_profile = profile_experiment(selected, out_dir=OUTPUT / "profiles" / "original",
+                                         performance=None, steps=20)
+    fast_profile = profile_experiment(selected, out_dir=OUTPUT / "profiles" / "selected",
+                                     performance=PERFORMANCE, steps=20,
+                                     io_directories={"local": "/content" if Path("/content").exists() else "/tmp",
+                                                     "results": OUTPUT})
+    print(format_profile(original_profile))
+    print(format_profile(fast_profile))
 ''')
     md(r"""
 ## What the graphs measure
@@ -225,7 +255,7 @@ applies to this different distribution. Larger R also retains the previous prepa
     for name, title, kind, explanation in sections:
         md(f"## {title}\n\n{explanation}")
         plot = f"plot_fixed_lags({name}, probability=True, save=True)" if kind == "fixed" else f"plot_moving_lag({name}, theta=THETA, save=True)"
-        code(f'{name} = train(experiments["{name}"], OUTPUT)\n{plot}')
+        code(f'{name} = train(experiments["{name}"], OUTPUT, performance=PERFORMANCE)\n{plot}')
     md("""
 ## 12. Review statuses and resume
 
@@ -233,6 +263,10 @@ Re-run a section with the same source revision, run tag, seeds, and scientific s
 Increasing `STEPS` or the per-seed time budget is allowed; changing the data, moments, learning
 rates, or probe coefficient requires a new run tag. A disconnection can lose work since the last
 checkpoint (5,000 updates by default). Numerical failures and failed acquisition remain visible.
+Packing and compilation are operational options and may change on resume; numerical audits run
+again at the resumed state. The recognized previous runner version is upgraded without resetting
+parameters, Adam buffers, RNG, or the training clock; its source and manifest are archived.
+Unrecognized scientific source changes are still rejected.
 
 Every arm saves `config.json`, `history.csv`, `asymptotic_errors.csv`, `certified_radii.csv`,
 `runs.csv`, figures, datasets, and complete optimizer/RNG checkpoints. The source hashes accompany

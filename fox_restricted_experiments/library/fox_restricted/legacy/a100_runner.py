@@ -279,7 +279,7 @@ def run_large_suite(cfg, out_dir, seeds=(0, 1, 2), gate_modes=("learned", "retri
                     resume=True, progress=True, fixed_lags=(1, 2, 3, 4, 5, 8, 16, 32, 64),
                     theta_values=(.25, .5, .75), clock_coefficients=(.001, .003, .01),
                     error_targets=(.1, .01, .001), check_every=100,
-                    compile_gradients=False, max_updates=None):
+                    compile_gradients=False, max_updates=None, compute_factory=None):
     """Run or resume a complete matrix without resetting any training state.
 
     Only ``cfg.steps`` and ``cfg.max_seconds`` may increase on resume. Reporting
@@ -425,6 +425,9 @@ def run_large_suite(cfg, out_dir, seeds=(0, 1, 2), gate_modes=("learned", "retri
                 elapsed_before = state["elapsed_seconds"]
                 session_start = time.monotonic()
                 backend = _GradientBackend(model, compiled=compile_gradients)
+                compute = compute_factory(model, optimizer) if compute_factory is not None else None
+                if compute is not None:
+                    payload.setdefault("performance_sessions", []).append({})
                 paused = False
 
                 def elapsed():
@@ -456,6 +459,8 @@ def run_large_suite(cfg, out_dir, seeds=(0, 1, 2), gate_modes=("learned", "retri
                     backend.compile_seconds = 0.
                     payload["compile_audits"].extend(dict(**tags, step=state["step"], **row) for row in backend.audits)
                     backend.audits.clear()
+                    if compute is not None:
+                        payload["performance_sessions"][-1] = dict(last_step=state["step"], **compute.describe())
                     payload.update(model=_cpu_tensors(model.params()), optimizer=_optimizer_state(optimizer),
                                    rng_state=rng.bit_generator.state, config=asdict(c))
                     start_write = time.monotonic()
@@ -495,8 +500,11 @@ def run_large_suite(cfg, out_dir, seeds=(0, 1, 2), gate_modes=("learned", "retri
                             break
                         base, rates, counts, batch = _step_inputs(c, kind, step, acquisition, rng)
                         # Keep acquisition native; compile at the acquired state.
-                        gradients, info = (model.gradients(counts, validate_counts=False) if step <= 3 else backend(counts))
-                        _optimizer_step(model, optimizer, gradients, rates, step)
+                        if compute is None:
+                            gradients, info = (model.gradients(counts, validate_counts=False) if step <= 3 else backend(counts))
+                            _optimizer_step(model, optimizer, gradients, rates, step)
+                        else:
+                            gradients, info = compute.update(rates, step, counts=counts)
                         state["step"], state["S"] = step, state["S"] + base
                         state["examples"] += 4 * batch + 2 * c.n
                         invocation_updates += 1

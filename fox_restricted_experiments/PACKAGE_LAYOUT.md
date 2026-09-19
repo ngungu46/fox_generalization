@@ -14,6 +14,7 @@ fox_restricted_experiments/
 │   ├── __init__.py                   # notebook-facing public imports
 │   ├── study.py                      # eight experiment definitions
 │   ├── runtime.py                    # Colab storage, hardware, benchmark
+│   ├── profiling.py                  # actual-device phase timing and traces
 │   ├── models/                       # architecture and literal-stream audits
 │   ├── data/                         # sampled structured-token streams
 │   ├── training/                     # optimization and experiment orchestration
@@ -27,9 +28,11 @@ fox_restricted_experiments/
 ```
 
 Start at the public API and the notebook to understand what is run. The existing
-scientific implementation remains in `legacy/` byte-for-byte: earlier resumable
-checkpoints require the exact source hashes of `core.py`, `runner.py`,
-`a100_runner.py`, and `asymptotics.py`. The small same-named files at the experiment
+model, objective and error-bound kernels remain unchanged in `legacy/`.
+The runner now accepts an accelerated compute backend. A recognized previous
+runner can upgrade its checkpoint metadata while preserving training state and
+archiving its original source. Unknown scientific changes still fail the source
+guard. The small same-named files at the experiment
 root are compatibility entry points, not separate implementations. Existing
 result folders and their original source snapshots are retained.
 

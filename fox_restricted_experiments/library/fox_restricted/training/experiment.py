@@ -37,7 +37,7 @@ def _add_ratio_probes(path, theta):
     _atomic_csv(path / "asymptotic_errors.csv", rows)
 
 
-def train(experiment, output_root, *, resume=True, progress=True, max_updates=None):
+def train(experiment, output_root, *, resume=True, progress=True, max_updates=None, performance=None):
     """Train one named arm over its seeds, or resume its exact saved state.
 
     Pair data uses the unchanged, audited finite-population runner. Random
@@ -46,10 +46,20 @@ def train(experiment, output_root, *, resume=True, progress=True, max_updates=No
     warm start. Both implementations retain every Adam buffer on resume.
     """
     path = Path(output_root).expanduser().resolve() / experiment.name
+    if resume:
+        from .checkpoint_upgrade import upgrade_known_runner
+        upgraded = upgrade_known_runner(path, experiment.dataset)
+        if upgraded and progress:
+            print(f"{experiment.name}: retained existing training state across the performance-only runner upgrade", flush=True)
     if experiment.dataset == "random":
         from .random_training import run_random_experiment
-        run_random_experiment(experiment, path, resume=resume, progress=progress,
-                              max_updates=max_updates)
+        try:
+            run_random_experiment(experiment, path, resume=resume, progress=progress,
+                                  max_updates=max_updates, performance=performance)
+        finally:
+            if performance is not None and (path / "config.json").exists():
+                from .performance import save_performance_source
+                save_performance_source(path)
     else:
         from ..legacy.a100_runner import _atomic_json
         probe_manifest = path / "notebook_probes.json"
@@ -60,6 +70,10 @@ def train(experiment, output_root, *, resume=True, progress=True, max_updates=No
             if json.loads(probe_manifest.read_text()) != expected:
                 raise ValueError("Moving-probe definition changed; use a new output folder")
         try:
+            compute_factory = None
+            if performance is not None:
+                from .performance import ComputeEngine
+                compute_factory = lambda model, optimizer: ComputeEngine(model, optimizer, performance)
             run_large_suite(
                 experiment.config, path, seeds=experiment.seeds,
                 gate_modes=(experiment.gate_mode,), optimizers=(experiment.optimizer,),
@@ -67,11 +81,15 @@ def train(experiment, output_root, *, resume=True, progress=True, max_updates=No
                 log_every=experiment.log_every, checkpoint_every=experiment.checkpoint_every,
                 check_every=experiment.check_every, resume=resume, progress=progress,
                 fixed_lags=tuple(experiment.config.R + i for i in (1, 2, 3)),
-                theta_values=(experiment.theta,), clock_coefficients=(.01,), max_updates=max_updates)
+                theta_values=(experiment.theta,), clock_coefficients=(.01,), max_updates=max_updates,
+                compute_factory=compute_factory)
         finally:
             if (path / "history.csv").exists():
                 _add_ratio_probes(path, experiment.theta)
                 _atomic_json(probe_manifest, expected)
+            if performance is not None and (path / "config.json").exists():
+                from .performance import save_performance_source
+                save_performance_source(path)
     return Run(path, experiment.name)
 
 

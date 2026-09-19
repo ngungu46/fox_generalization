@@ -23,6 +23,15 @@ There are 24 seed/arm runs. A measured benchmark runs before training; completio
 time depends on the actual hardware and data. Drive checkpoints allow multiple
 Colab sessions. An A100 run has not been performed in local development.
 
+## GPU performance
+
+The updated notebook enables packed random records and optional compiled
+gradient-plus-optimizer updates. FP64, data, schedules and optimizer state
+remain unchanged. Compilation has a one-time startup cost and must pass a
+numerical audit on the selected GPU. Set `RUN_PROFILE=True` to measure the
+original and selected paths, including local/Drive checkpoint costs.
+See [performance settings and measurements](docs/PERFORMANCE.md).
+
 ## The eight runs
 
 | Name | Dataset | Forgetting | Optimizer | Main plot |
@@ -87,7 +96,10 @@ library/fox_restricted/
     data/random_streams.py           random structured datasets
     training/experiment.py           train one named experiment
     training/random_training.py      random-data training and checkpoints
-    training/random_backend.py       exact arbitrary-stream derivatives
+    training/random_backend.py       reference arbitrary-stream derivatives
+    training/packed_random.py        same data/loss without padding work
+    training/acceleration.py         audited compiled gradient + optimizer
+    profiling.py                    actual-runtime timing and traces
     evaluation/probes.py             fixed and m/h lag probes
     plotting/convergence.py          focused error/probability figures
     legacy/                          preserved, audited finite-pair kernel
@@ -97,7 +109,8 @@ results/                             earlier measured CPU pilots
 ```
 
 The small old filenames at this folder’s root are compatibility shims. The
-preserved kernel keeps old checkpoint source hashes valid. Earlier notebooks
+model/objective kernel is unchanged. Known previous-runner checkpoints can
+upgrade without resetting training, with original sources archived. Earlier notebooks
 that embed source are retained under `notebooks/archive/`; the old root A100
 notebook paths now open the new readable notebook. [Full source map](PACKAGE_LAYOUT.md).
 

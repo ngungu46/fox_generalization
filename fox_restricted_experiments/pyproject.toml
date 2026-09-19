@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fox-restricted-experiments"
-version = "0.2.0"
+version = "0.3.0"
 description = "Restricted FoX answer-supervised generalization experiments"
 readme = "README.md"
 requires-python = ">=3.10"

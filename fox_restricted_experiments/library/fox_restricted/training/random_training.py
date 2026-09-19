@@ -65,11 +65,11 @@ def _dataset(experiment, cfg, out):
     return batch, digest
 
 
-def _draw_gradients(model, experiment, population, rng, step):
+def _draw_inputs(model, experiment, population, rng, step):
     cfg = model.cfg
     if experiment.random_sampling == "online":
         batch = sample_stream_batch(cfg.n, cfg.R, experiment.random_data, rng=rng, device=cfg.device)
-        return (*random_gradients(model, batch, validate=False), batch.size)
+        return None, batch, batch.size
     counts = None
     size = population.size
     if experiment.optimizer == "sgd" and step > 3:
@@ -77,7 +77,12 @@ def _draw_gradients(model, experiment, population, rng, step):
                          (1 + (step - 4) / cfg.offset) ** cfg.batch_growth)
         probabilities = np.full(population.size, 1 / population.size)
         counts = torch.as_tensor(rng.multinomial(size, probabilities), device=cfg.device, dtype=torch.float64)
-    return (*random_gradients(model, population, counts, validate=False), size)
+    return counts, None, size
+
+
+def _draw_gradients(model, experiment, population, rng, step):
+    counts, batch, size = _draw_inputs(model, experiment, population, rng, step)
+    return (*random_gradients(model, population if batch is None else batch, counts, validate=False), size)
 
 
 def _diagnostics(model, tags, step, S, examples, elapsed, reference_gap, info):
@@ -110,7 +115,7 @@ def _write_tables(out, records, requested_steps):
     _atomic_csv(out / "runs.csv", summaries)
 
 
-def run_random_experiment(experiment, out, *, resume=True, progress=True, max_updates=None):
+def run_random_experiment(experiment, out, *, resume=True, progress=True, max_updates=None, performance=None):
     """Run one random-data arm across its seeds, committing validated state."""
     cfg = experiment.config
     _validate(cfg)
@@ -189,13 +194,23 @@ def run_random_experiment(experiment, out, *, resume=True, progress=True, max_up
         acquisition = acquisition_rates(c, experiment.optimizer)
         frozen_initial = payload["frozen_initial"].to(c.device)
         before, started = state["elapsed_seconds"], time.monotonic()
+        compute = None
+        if performance is not None:
+            from .performance import ComputeEngine
+            compute = ComputeEngine(model, adam, performance, population,
+                                    online=experiment.random_sampling == "online")
+            payload.setdefault("performance_sessions", []).append({})
+
+        def full_gradients():
+            return (random_gradients(model, population, validate=False) if compute is None
+                    else compute.gradients())
 
         def elapsed():
             return before + time.monotonic() - started
 
         def record(info=None):
             if info is None:
-                _, info = random_gradients(model, population, validate=False)
+                _, info = full_gradients()
             for key in ("history", "errors", "radii"):
                 payload[key] = [row for row in payload[key] if row["step"] != state["step"]]
             payload["history"].append(_diagnostics(model, tags, state["step"], state["S"],
@@ -213,6 +228,8 @@ def run_random_experiment(experiment, out, *, resume=True, progress=True, max_up
             state["elapsed_seconds"] = elapsed()
             payload.update(model=_cpu_tensors(model.params()), optimizer=_optimizer_state(adam),
                            rng_state=rng.bit_generator.state, final_hash=fingerprint(model.params()))
+            if compute is not None:
+                payload["performance_sessions"][-1] = dict(last_step=state["step"], **compute.describe())
             _atomic_torch_save(checkpoint, payload)
             records[checkpoint.stem] = {key: payload[key] for key in
                                       ("tags", "state", "history", "errors", "radii", "initial_hash", "dataset_hash", "final_hash")}
@@ -235,7 +252,7 @@ def run_random_experiment(experiment, out, *, resume=True, progress=True, max_up
         try:
             for step in range(state["step"] + 1, c.steps + 1):
                 if elapsed() >= c.max_seconds:
-                    gradients, info = random_gradients(model, population, validate=False)
+                    gradients, info = full_gradients()
                     issue = _check_health(model, gradients, info, frozen_initial)
                     if issue:
                         rollback(issue, step - 1)
@@ -245,15 +262,19 @@ def run_random_experiment(experiment, out, *, resume=True, progress=True, max_up
                         commit()
                     break
                 base, rates = (0., acquisition[step - 1]) if step <= 3 else rates_at(c, experiment.optimizer, step - 4)
-                gradients, info, count = _draw_gradients(model, experiment, population, rng, step)
-                _optimizer_step(model, adam, gradients, rates, step)
+                if compute is None:
+                    gradients, info, count = _draw_gradients(model, experiment, population, rng, step)
+                    _optimizer_step(model, adam, gradients, rates, step)
+                else:
+                    counts, batch, count = _draw_inputs(model, experiment, population, rng, step)
+                    gradients, info = compute.update(rates, step, counts=counts, batch=batch)
                 state.update(step=step, S=state["S"] + base, examples=state["examples"] + count)
                 updates += 1
                 pause = max_updates is not None and updates >= max_updates
                 log = step == 3 or step % experiment.log_every == 0 or step == c.steps or pause
                 save = step <= 3 or step % experiment.checkpoint_every == 0 or step == c.steps or pause
                 if log or save or step % experiment.check_every == 0:
-                    gradients, info = random_gradients(model, population, validate=False)
+                    gradients, info = full_gradients()
                     issue = _check_health(model, gradients, info, frozen_initial)
                     if issue:
                         rollback(issue, step)
