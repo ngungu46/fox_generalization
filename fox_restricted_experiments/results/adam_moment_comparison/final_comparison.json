@@ -1,0 +1,38 @@
+[
+  {
+    "pilot": "pilot_R2_seed0",
+    "gate_mode": "learned",
+    "step": "12000",
+    "S": "53.929567147825715",
+    "lag": "1",
+    "lower_error": "0.027314862505669387",
+    "upper_error": "0.027434279313459424"
+  },
+  {
+    "pilot": "adam_moment_sensitivity_R2_seed0",
+    "gate_mode": "learned",
+    "step": "12000",
+    "S": "53.929567147825715",
+    "lag": "5",
+    "lower_error": "0.009633604193406425",
+    "upper_error": "0.009633604231917066"
+  },
+  {
+    "pilot": "pilot_R2_seed0",
+    "gate_mode": "retrieval_frozen",
+    "step": "12000",
+    "S": "53.929567147825715",
+    "lag": "5",
+    "lower_error": "0.3167033679080634",
+    "upper_error": "0.3181230842473138"
+  },
+  {
+    "pilot": "adam_moment_sensitivity_R2_seed0",
+    "gate_mode": "retrieval_frozen",
+    "step": "12000",
+    "S": "53.929567147825715",
+    "lag": "17",
+    "lower_error": "0.197076408032694",
+    "upper_error": "0.19707640846451735"
+  }
+]

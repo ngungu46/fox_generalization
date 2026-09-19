@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fox-restricted-experiments"
+version = "0.2.0"
+description = "Restricted FoX answer-supervised generalization experiments"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "torch>=2.2",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+notebook = ["ipython>=8", "nbformat>=5"]
+
+[tool.setuptools]
+package-dir = {"" = "library"}
+
+[tool.setuptools.packages.find]
+where = ["library"]
+include = ["fox_restricted*"]
+
+[tool.setuptools.package-data]
+"fox_restricted.legacy" = ["SOURCE_SHA256.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["library", "."]

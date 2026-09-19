@@ -178,3 +178,21 @@ Read [the experiment design](docs/experiment_design.md),
 [validation status](docs/validation.md) for details. The authoritative theory
 source is the supplied `learning_with_cot-3.pdf`; its hash is recorded without
 copying the private manuscript into this repository.
+
+## Restricted ALiBi theory experiment
+
+The independent [restricted experiment](fox_restricted_experiments/README.md)
+trains the exact answer-supervised two-head model on all `N(N-1)` ordered key
+pairs with configurable recall lag `R`. It compares SGD and Adam with learned
+or frozen retrieval forgetting, retaining the learned binder. The
+[readable Colab notebook](fox_restricted_experiments/notebooks/FoX_Restricted_A100_Colab.ipynb)
+installs and imports its organized `fox_restricted` library. It contains eight
+training/plotting sections, adding random structured sequences with target lag
+at most R to the four pair-data arms. [Measured pilot results](fox_restricted_experiments/PILOT_RESULTS.md)
+include both successful training runs and the unsuccessful learned-SGD `R=4`
+run; they do not establish the asymptotic claims.
+
+The [A100 asymptotics notebook](fox_restricted_experiments/FoX_Restricted_A100_Asymptotics.ipynb)
+scales this to 128 keys and 200,000 updates per arm, with resumable checkpoints
+and lower/upper bounds on worst-case error at fixed and growing lags. See its
+[error definition, measured Adam diagnosis, and run guide](fox_restricted_experiments/A100_README.md).

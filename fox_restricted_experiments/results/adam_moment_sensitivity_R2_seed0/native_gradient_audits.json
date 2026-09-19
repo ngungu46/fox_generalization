@@ -1,0 +1,54 @@
+[
+  {
+    "seed": 0,
+    "gate_mode": "learned",
+    "optimizer": "adam",
+    "step": 0,
+    "relative_max_gradient_error_by_block": [
+      0.0,
+      0.0,
+      1.9645018230700706e-16
+    ],
+    "absolute_log_loss_error": 4.440892098500626e-16,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "learned",
+    "optimizer": "adam",
+    "step": 3,
+    "relative_max_gradient_error_by_block": [
+      2.3401205662597917e-15,
+      2.4308175305521285e-15,
+      5.942683663591964e-16
+    ],
+    "absolute_log_loss_error": 2.220446049250313e-16,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "retrieval_frozen",
+    "optimizer": "adam",
+    "step": 0,
+    "relative_max_gradient_error_by_block": [
+      0.0,
+      0.0,
+      1.9645018230700706e-16
+    ],
+    "absolute_log_loss_error": 4.440892098500626e-16,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "retrieval_frozen",
+    "optimizer": "adam",
+    "step": 3,
+    "relative_max_gradient_error_by_block": [
+      2.250108910298204e-15,
+      2.160719953745949e-15,
+      3.0226085758435016e-21
+    ],
+    "absolute_log_loss_error": 3.3306690738754696e-16,
+    "passed": true
+  }
+]

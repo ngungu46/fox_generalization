@@ -1,0 +1,24 @@
+{
+  "key_vocabulary_size": 8,
+  "pair_cases": 56,
+  "recall_lag": 2,
+  "base_recall_sequences": 56,
+  "base_overwrite_sequences": 56,
+  "paired_sequences_with_complements": 224,
+  "calibration_sequences": 16,
+  "total_expanded_sequences": 240,
+  "mixture_weights": {
+    "calibration": 0.6,
+    "overwrite": 0.2,
+    "recall": 0.2
+  },
+  "lag_units": "records, newest record at lag 1",
+  "query_is_attention_candidate": false,
+  "dataset_items": "N(N-1) pair cases; each evaluates both families and complements",
+  "files": {
+    "pair_cases": "pairs.jsonl",
+    "expanded_sequences": "dataset.jsonl",
+    "base_recall_at_R": "recall_at_R.jsonl",
+    "pair_index": "pair_index.csv"
+  }
+}

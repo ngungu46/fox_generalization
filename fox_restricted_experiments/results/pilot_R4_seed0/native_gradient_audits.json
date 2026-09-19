@@ -1,0 +1,106 @@
+[
+  {
+    "seed": 0,
+    "gate_mode": "learned",
+    "optimizer": "sgd",
+    "step": 0,
+    "relative_max_gradient_error_by_block": [
+      0.0,
+      0.0,
+      4.720444915859109e-16
+    ],
+    "absolute_log_loss_error": 4.440892098500626e-16,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "learned",
+    "optimizer": "sgd",
+    "step": 3,
+    "relative_max_gradient_error_by_block": [
+      1.4170925776450426e-15,
+      1.6351046208547736e-15,
+      5.670315523318135e-16
+    ],
+    "absolute_log_loss_error": 2.220446049250313e-16,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "learned",
+    "optimizer": "adam",
+    "step": 0,
+    "relative_max_gradient_error_by_block": [
+      0.0,
+      0.0,
+      4.720444915859109e-16
+    ],
+    "absolute_log_loss_error": 4.440892098500626e-16,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "learned",
+    "optimizer": "adam",
+    "step": 3,
+    "relative_max_gradient_error_by_block": [
+      2.916380279117027e-15,
+      2.8355962564399225e-15,
+      2.390010526248869e-16
+    ],
+    "absolute_log_loss_error": 5.551115123125783e-17,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "retrieval_frozen",
+    "optimizer": "sgd",
+    "step": 0,
+    "relative_max_gradient_error_by_block": [
+      0.0,
+      0.0,
+      4.720444915859109e-16
+    ],
+    "absolute_log_loss_error": 4.440892098500626e-16,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "retrieval_frozen",
+    "optimizer": "sgd",
+    "step": 3,
+    "relative_max_gradient_error_by_block": [
+      1.4170925770092227e-15,
+      1.3080836960906326e-15,
+      1.275820992950422e-15
+    ],
+    "absolute_log_loss_error": 0.0,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "retrieval_frozen",
+    "optimizer": "adam",
+    "step": 0,
+    "relative_max_gradient_error_by_block": [
+      0.0,
+      0.0,
+      4.720444915859109e-16
+    ],
+    "absolute_log_loss_error": 4.440892098500626e-16,
+    "passed": true
+  },
+  {
+    "seed": 0,
+    "gate_mode": "retrieval_frozen",
+    "optimizer": "adam",
+    "step": 3,
+    "relative_max_gradient_error_by_block": [
+      2.4497496340889225e-15,
+      2.7174355402187814e-15,
+      1.1950077610200583e-16
+    ],
+    "absolute_log_loss_error": 2.220446049250313e-16,
+    "passed": true
+  }
+]
